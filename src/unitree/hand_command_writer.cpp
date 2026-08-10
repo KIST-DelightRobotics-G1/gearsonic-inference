@@ -173,10 +173,14 @@ void HandCommandWriter::loop() {
             left = right = stop_command();
         } else if (auto vla = VlaTokenReceiver::instance().latent_buf.GetDataWithTime();
                    RobotOwnership::instance().owner() == RobotOwnership::Owner::kVla &&
-                   vla.HasData() && vla.GetAgeMs() <= kVlaTokenHoldMs) {
+                   vla.HasData()) {
             // VLA owns the robot (first-come arbitration, see
             // robot_ownership.hpp): its hand targets replace the VR trigger
-            // mapping. Under teleop ownership this branch never fires.
+            // mapping. Deliberately no staleness check: if the token stream
+            // is lost the hands HOLD the last commanded targets (matching
+            // the body's standing hold) — a gripped object stays gripped
+            // instead of the fist/open fallbacks taking over. Under teleop
+            // ownership this branch never fires.
             left  = from_vla_joints(vla.data->left_hand,  /*is_left=*/true);
             right = from_vla_joints(vla.data->right_hand, /*is_left=*/false);
         } else if (hold_fist) {

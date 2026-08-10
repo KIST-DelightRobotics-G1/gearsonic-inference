@@ -9,6 +9,7 @@
 #include "unitree/unitree_state_reader.hpp"
 
 #include "control/robot_ownership.hpp"
+#include "vla/vla_initial_pose.hpp"
 #include "vla/vla_token_receiver.hpp"
 
 #include <algorithm>
@@ -352,17 +353,37 @@ bool WholeBodyController::tick_vla_control(std::chrono::steady_clock::time_point
         vla_active_ = true;
     }
 
-    // Sticky: once external tokens drive the robot, never fall back to the
-    // planner path implicitly — a stale planner motion resuming mid-task
-    // would be an uncommanded movement. Stream lost -> damping.
-    if (!vla.HasData() || vla.GetAgeMs() > kVlaTokenHoldMs) {
-        publish_damping();
-        return true;
+    // Stream-loss handling: losing the token stream ends the VLA session
+    // (latched — a resumed stream may not silently retake the robot, and
+    // the planner path's playback timeline froze at the pre-VLA state, so
+    // falling back there would yank the robot toward a stale reference).
+    // But the decoder and robot state are still healthy, so instead of
+    // damping (a fall when not hung) we blend the last commanded token to
+    // the verified safe standing token and keep balancing there: the robot
+    // ends up standing in place, waiting. E-stop still gives damping;
+    // restart is the only way back to control.
+    TokenEncoder::Token token;
+    if (!vla_stream_lost_ && (!vla.HasData() || vla.GetAgeMs() > kVlaTokenHoldMs)) {
+        std::cerr << "[WholeBodyController] VLA token stream LOST (>"
+                  << kVlaTokenHoldMs << "ms stale) — blending to safe "
+                     "standing hold (e-stop to stop, restart to recover)\n";
+        vla_stream_lost_ = true;
+        vla_loss_blend_tick_ = 0;
     }
-
-    // VlaLatentAction::token and TokenEncoder::Token are both
-    // std::array<float, 64>.
-    TokenEncoder::Token token = vla.data->token;
+    if (vla_stream_lost_) {
+        float alpha = 1.0f;
+        if (vla_loss_blend_tick_ < kVlaLossBlendTicks) {
+            alpha = static_cast<float>(++vla_loss_blend_tick_) / kVlaLossBlendTicks;
+        }
+        for (size_t i = 0; i < token.size(); ++i)
+            token[i] = (1.0f - alpha) * last_vla_token_[i]
+                       + alpha * kVlaSafeStandingToken[i];
+    } else {
+        // VlaLatentAction::token and TokenEncoder::Token are both
+        // std::array<float, 64>.
+        token = vla.data->token;
+        last_vla_token_ = token;
+    }
 
     MotorCommand cmd;
     if (!decoder_.step(token, logger_, cmd))

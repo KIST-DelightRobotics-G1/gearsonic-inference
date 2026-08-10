@@ -202,10 +202,12 @@ Dex3 hand targets as `kist_msgs::LatentActionStep` on `rt/kist/latent_action`
   A token fresher than 200 ms claims for VLA and switches
   `WholeBodyController` into external-token mode (planner path bypassed);
   if teleop calibrated first, VLA tokens are ignored until restart.
-  VLA ownership is sticky — a stream stale for 500 ms latches damping
-  rather than falling back to a stale planner motion or teleop. Under VLA
-  ownership its hand targets replace the VR trigger mapping. The VR grip
-  e-stop outranks everything, always.
+  VLA ownership is sticky — a stream stale for 500 ms counts as LOST and
+  the controller blends (1 s) to a verified safe standing token and keeps
+  balancing there, hands holding their last targets; neither a resumed
+  stream nor the planner path (its playback timeline froze at the pre-VLA
+  state) may retake the robot — restart to recover. The e-stop outranks
+  everything, always.
 - **Interop probe**: `./build/vla_receiver_probe [domain_id] [iface]`
   prints receive rate and newest token — pair it with kist-vla-inference
   in `--io.action-transport dds` mode to verify the link without the robot.

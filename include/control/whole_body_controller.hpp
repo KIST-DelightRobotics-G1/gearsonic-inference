@@ -71,7 +71,10 @@ private:
     bool tick_vla_control(std::chrono::steady_clock::time_point t0);
     void poll_vla_command();
     bool vla_active_{false};
+    bool vla_stream_lost_{false};
     bool vla_denied_logged_{false};
+    int  vla_loss_blend_tick_{0};
+    TokenEncoder::Token last_vla_token_{};
 
     TokenEncoder  encoder_;
     PolicyDecoder decoder_;

@@ -24,9 +24,12 @@ inline constexpr const char* kVlaWbcCommandTopic   = "rt/kist/wbc_command";
 // Freshness thresholds for the external token stream (see
 // WholeBodyController::tick_vla_control):
 //   fresh  — a token this recent switches the controller into VLA mode
-//   hold   — beyond this age in VLA mode, the stream counts as lost
-inline constexpr double kVlaTokenFreshMs = 200.0;
-inline constexpr double kVlaTokenHoldMs  = 500.0;
+//   hold   — beyond this age in VLA mode, the stream counts as LOST; the
+//            controller then blends to the safe standing token and holds
+//            (kVlaSafeStandingToken; ticks below set the blend length)
+inline constexpr double kVlaTokenFreshMs    = 200.0;
+inline constexpr double kVlaTokenHoldMs     = 500.0;
+inline constexpr int    kVlaLossBlendTicks  = 50;  // 1s at 50Hz
 
 // Plain-data snapshot of the newest kist_msgs::LatentActionStep.
 // Hand joints are Dex3 motor order (thumb x3, index x2, middle x2) —
