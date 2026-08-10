@@ -38,9 +38,14 @@ inline constexpr int kMotorEnd    = 7;
 //   Left  max = { 1.05,  1.05,   1.75,  0.00,  0.00,  0.00,  0.00}
 //   Right min = {-1.05, -1.05,  -1.75,  0.00,  0.00,  0.00,  0.00}
 //   Right max = { 1.05,  0.742,  0.00,  1.57,  1.75,  1.57,  1.75}
-inline constexpr std::array<float, 7> kDex3LeftOpen  = {-1.05f, -0.724f,  0.00f,  0.00f,  0.00f,  0.00f,  0.00f};
-inline constexpr std::array<float, 7> kDex3LeftClose = { 1.05f,  1.05f,   1.75f, -1.57f, -1.75f, -1.57f, -1.75f};
-inline constexpr std::array<float, 7> kDex3RightOpen  = { 1.05f,  0.742f,  0.00f,  0.00f,  0.00f,  0.00f,  0.00f};
-inline constexpr std::array<float, 7> kDex3RightClose = {-1.05f, -1.05f,  -1.75f,  1.57f,  1.75f,  1.57f,  1.75f};
+//
+// Motor 0 (thumb rotation) is pinned at the center of its symmetric
+// ±1.05 range on both hands: sweeping it during the grasp visibly twists
+// the thumb sideways, so the thumb only flexes (motors 1..2) and never
+// rotates.
+inline constexpr std::array<float, 7> kDex3LeftOpen  = { 0.00f, -0.724f,  0.00f,  0.00f,  0.00f,  0.00f,  0.00f};
+inline constexpr std::array<float, 7> kDex3LeftClose = { 0.00f,  1.05f,   1.75f, -1.57f, -1.75f, -1.57f, -1.75f};
+inline constexpr std::array<float, 7> kDex3RightOpen  = { 0.00f,  0.742f,  0.00f,  0.00f,  0.00f,  0.00f,  0.00f};
+inline constexpr std::array<float, 7> kDex3RightClose = { 0.00f, -1.05f,  -1.75f,  1.57f,  1.75f,  1.57f,  1.75f};
 
 } // namespace kist

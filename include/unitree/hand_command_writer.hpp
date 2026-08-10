@@ -20,6 +20,11 @@ namespace kist {
 // trigger presses in). InputHandler is not on the path: the trigger
 // stream is orthogonal to the movement command it produces.
 //
+// Gated by TeleopTracker::calibrated(): until teleop calibration engages,
+// the trigger/grip axes belong to the locomotion UI, so both hands hold
+// a closed fist; tracking starts kFistReleaseDelay after calibration
+// (the fist doesn't pop open the instant the gesture lands).
+//
 // SAFETY:
 //  - InputHandler::estop() latched -> writer publishes stop mode
 //    (kp=0, kd=0, timeout bit) every tick.

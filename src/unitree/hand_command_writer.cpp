@@ -3,6 +3,7 @@
 #include "common/thread_priority.hpp"
 #include "motion/input_handler.hpp"
 #include "pico/pico_vr_reader.hpp"
+#include "teleop/teleop_tracker.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -18,6 +19,9 @@ static constexpr int     kMotorCount    = 7;
 // hold a grasp against light loads without heating the tiny 4010 actuators.
 static constexpr float   kHandKp        = 1.5f;
 static constexpr float   kHandKd        = 0.1f;
+// Fist keeps holding this long after calibration engages, so the hands
+// don't pop open the moment the B-hold gesture lands.
+static constexpr auto    kFistReleaseDelay = std::chrono::milliseconds(500);
 
 // RIS_Mode byte layout: [id:4][status:3][timeout:1] (SDK example).
 static inline uint8_t ris_mode(uint8_t id, bool enable) {
@@ -126,12 +130,27 @@ void HandCommandWriter::publish(const HandCommand& left, const HandCommand& righ
 void HandCommandWriter::loop() {
     using clock = std::chrono::steady_clock;
 
+    bool was_calibrated = false;
+    clock::time_point calibrated_at{};
+
     while (!stop_) {
         auto t0 = clock::now();
+
+        bool calibrated = TeleopTracker::instance().calibrated();
+        if (calibrated && !was_calibrated)
+            calibrated_at = t0;
+        was_calibrated = calibrated;
+        bool hold_fist = !calibrated || (t0 - calibrated_at) < kFistReleaseDelay;
 
         HandCommand left, right;
         if (InputHandler::instance().estop()) {
             left = right = stop_command();
+        } else if (hold_fist) {
+            // Before teleop calibration the trigger/grip axes still serve
+            // the locomotion UI (trigger+A/B height, extended mode list),
+            // so the hands hold a closed fist instead of tracking them.
+            left  = from_grip_and_trigger(1.0, 1.0, /*is_left=*/true);
+            right = from_grip_and_trigger(1.0, 1.0, /*is_left=*/false);
         } else if (auto ctrl = PicoVRReader::instance().ctrl_buf.GetData()) {
             left  = from_grip_and_trigger(ctrl->left_grip,  ctrl->left_trigger,  /*is_left=*/true);
             right = from_grip_and_trigger(ctrl->right_grip, ctrl->right_trigger, /*is_left=*/false);
