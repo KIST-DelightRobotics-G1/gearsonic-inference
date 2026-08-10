@@ -57,6 +57,7 @@ private:
     // Which stages came up, so stop()/rollback only touches what runs.
     bool vr_started_{false};
     bool robot_started_{false};
+    bool vla_started_{false};
     bool planner_started_{false};
     bool writer_started_{false};
     bool hand_writer_started_{false};

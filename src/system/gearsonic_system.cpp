@@ -10,6 +10,8 @@
 #include "unitree/unitree_command_writer.hpp"
 #include "unitree/unitree_state_reader.hpp"
 
+#include "vla/vla_token_receiver.hpp"
+
 #include <chrono>
 #include <csignal>
 #include <exception>
@@ -48,6 +50,15 @@ bool GearsonicSystem::start(const std::string& config_path) {
         return false;
     }
     robot_started_ = true;
+
+    // VLA latent-action Rx rides the DDS factory UnitreeStateReader just
+    // initialized. Pure intake — nothing moves until tokens arrive AND the
+    // controller is in CONTROL (first-come ownership, robot_ownership.hpp).
+    if (!VlaTokenReceiver::instance().start()) {
+        stop();
+        return false;
+    }
+    vla_started_ = true;
 
     std::cout << "[GearsonicSystem] waiting for robot state...\n";
     while (!UnitreeStateReader::instance().unitree_state_buf.GetData()) {
@@ -117,6 +128,10 @@ void GearsonicSystem::stop() {
     if (planner_started_) {
         PlannerInference::instance().stop();
         planner_started_ = false;
+    }
+    if (vla_started_) {
+        VlaTokenReceiver::instance().stop();
+        vla_started_ = false;
     }
     if (vr_started_) {
         TeleopTracker::instance().stop();

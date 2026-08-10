@@ -8,6 +8,9 @@
 #include "teleop/teleop_tracker.hpp"
 #include "unitree/unitree_state_reader.hpp"
 
+#include "control/robot_ownership.hpp"
+#include "vla/vla_token_receiver.hpp"
+
 #include <algorithm>
 #include <iostream>
 
@@ -198,6 +201,11 @@ void WholeBodyController::tick_control() {
         return;
     }
 
+    // A live external token stream (kist-vla-inference) overrides the
+    // planner+encoder path entirely.
+    if (tick_vla_control(t0))
+        return;
+
     // Snapshot the playback state. The lock protects cursor_ against the
     // planner thread's playback_snapshot(); playback_motion_ itself is only
     // ever written by this thread (advance_playback), so reading it through
@@ -249,6 +257,19 @@ void WholeBodyController::loop() try {
     while (!stop_) {
         auto t0 = clock::now();
 
+        poll_vla_command();
+
+        // First-come ownership: teleop claims the robot while calibrated
+        // and releases when calibration drops. (VLA claims/latches inside
+        // tick_vla_control; the e-stop below outranks both.)
+        {
+            auto& ownership = RobotOwnership::instance();
+            if (TeleopTracker::instance().calibrated())
+                ownership.try_claim(RobotOwnership::Owner::kTeleop);
+            else
+                ownership.release(RobotOwnership::Owner::kTeleop);
+        }
+
         // Operator e-stop: terminal state — damping every tick, no recovery.
         if (InputHandler::instance().estop()) {
             if (state_ != State::ESTOP) {
@@ -287,6 +308,75 @@ void WholeBodyController::loop() try {
     }
 } catch (const std::exception& e) {
     std::cerr << "[WholeBodyController] loop exception: " << e.what() << "\n";
+}
+
+// ─── VLA external-token mode ──────────────────────────────────────────────────
+
+void WholeBodyController::poll_vla_command() {
+    for (const auto& cmd : VlaTokenReceiver::instance().take_commands()) {
+        if (cmd.start) {
+            std::cout << "[WholeBodyController] VLA command: start (seq "
+                      << cmd.seq << ")\n";
+            operator_start_ = true;
+        }
+        if (cmd.stop) {
+            // Deliberately not wired to a state change yet: the VR grip
+            // e-stop is the authoritative stop path, and the semantics of a
+            // network stop (damping? hold? WAIT_FOR_CONTROL?) need a team
+            // decision.
+            std::cout << "[WholeBodyController] VLA command: stop (not acted "
+                         "on — use the VR e-stop; see poll_vla_command)\n";
+        }
+    }
+}
+
+bool WholeBodyController::tick_vla_control(std::chrono::steady_clock::time_point t0) {
+    using clock = std::chrono::steady_clock;
+    auto vla = VlaTokenReceiver::instance().latent_buf.GetDataWithTime();
+
+    if (!vla_active_) {
+        if (!vla.HasData() || vla.GetAgeMs() > kVlaTokenFreshMs)
+            return false;  // no live stream — planner path as usual
+
+        // First-come ownership: if teleop already holds the robot, ignore
+        // the token stream entirely (log once per denied stream).
+        if (!RobotOwnership::instance().try_claim(RobotOwnership::Owner::kVla)) {
+            if (!vla_denied_logged_) {
+                std::cout << "[WholeBodyController] VLA tokens arriving but teleop "
+                             "owns the robot — ignoring VLA until restart\n";
+                vla_denied_logged_ = true;
+            }
+            return false;
+        }
+        std::cout << "[WholeBodyController] VLA token stream live -> external token mode\n";
+        vla_active_ = true;
+    }
+
+    // Sticky: once external tokens drive the robot, never fall back to the
+    // planner path implicitly — a stale planner motion resuming mid-task
+    // would be an uncommanded movement. Stream lost -> damping.
+    if (!vla.HasData() || vla.GetAgeMs() > kVlaTokenHoldMs) {
+        publish_damping();
+        return true;
+    }
+
+    // VlaLatentAction::token and TokenEncoder::Token are both
+    // std::array<float, 64>.
+    TokenEncoder::Token token = vla.data->token;
+
+    MotorCommand cmd;
+    if (!decoder_.step(token, logger_, cmd))
+        return true;
+    motor_command_buf.SetData(cmd);
+
+    {
+        std::lock_guard<std::mutex> l(timing_mutex_);
+        timing_.encoder = 0;
+        timing_.decoder =
+            std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - t0).count();
+        timing_.total = timing_.decoder;
+    }
+    return true;
 }
 
 } // namespace kist
