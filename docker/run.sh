@@ -2,10 +2,21 @@
 # Launch (or re-attach to) a persistent named container.
 # Reuse across sessions so builds, caches, and background processes survive
 # until you explicitly `docker rm kist-gearsonic-inference`.
+#
+# The image is self-contained (deps + models + source baked in and built);
+# no source mount — `run.sh` drops you into a container with ready binaries
+# under build/. Flags:
+#   --gpus all           TensorRT inference (planner + WBC engines)
+#   --network host       unitree DDS + VLA DDS + the host-side VR daemon
+#   --cap-add=SYS_NICE   RT thread priorities for the control loops
+#
+# Iterative dev: add  -v "$(pwd)":/workspace/kist-gearsonic-inference  to
+# shadow the baked source with your working copy — then re-run the manual
+# thirdparty/model setup from the README (the bind mount hides the baked
+# copies) and rebuild inside.
 
 set -e
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONTAINER=kist-gearsonic-inference
 
 if [ "$(docker ps -q -f name=^${CONTAINER}$)" ]; then
@@ -21,7 +32,6 @@ else
         --gpus all \
         --network host \
         --cap-add=SYS_NICE \
-        -v "${REPO_DIR}:/workspace/kist-gearsonic-inference" \
         -w /workspace/kist-gearsonic-inference \
         kist-gearsonic-inference
 fi

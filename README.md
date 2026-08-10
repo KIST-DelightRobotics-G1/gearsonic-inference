@@ -27,7 +27,25 @@ cd kist-gearsonic-inference
 
 All following steps run from the repository root.
 
-### Install XRoboToolkit
+### Quick Start with Docker (recommended)
+
+The image is self-contained: it clones the pinned dependencies
+(unitree_sdk2, the PXREA VR client SDK), installs the CycloneDDS idlc
+toolchain, downloads the GEAR-SONIC models, bakes the source in, and builds
+the binaries — all at image-build time.
+
+```bash
+./docker/build.sh      # builds everything into the image
+./docker/run.sh        # shell with ready binaries under build/
+```
+
+The only host-side requirement besides Docker (with the NVIDIA runtime) is
+the **XRoboToolkit PC service** below — the VR daemon talks to the headset
+over USB and runs on the host; the container reaches it via `--network
+host`. Everything from *Install libPXREARobotSDK* on is the manual
+(non-Docker) alternative.
+
+### Install XRoboToolkit (host-side, required either way)
 
 ```bash
 wget https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases/download/v1.0.0/XRoboToolkit_PC_Service_1.0.0_ubuntu_22.04_amd64.deb
@@ -65,9 +83,24 @@ wget -P models https://huggingface.co/nvidia/GEAR-SONIC/resolve/main/planner_son
 
 ONNX models are converted to TensorRT engines automatically on first run.
 
-Everything below is included in the Docker image — build it with
-`./docker/build.sh`, enter it with `./docker/run.sh`, and run everything
-from Build on inside the container.
+### Install CycloneDDS (idlc toolchain)
+
+Required for the VLA DDS types (`idl/kist_latent_action.idl` -> C++ at build
+time). Version pinned to 0.10.2 to match unitree_sdk2's bundled ddscxx --
+same setup as kist-ext-sensor-io. Included in the Docker image.
+
+```bash
+git clone --depth 1 -b 0.10.2 https://github.com/eclipse-cyclonedds/cyclonedds.git /tmp/cyclonedds
+cmake -S /tmp/cyclonedds -B /tmp/cyclonedds/build \
+    -DCMAKE_INSTALL_PREFIX=/opt/cyclonedds -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_EXAMPLES=OFF -DENABLE_SSL=OFF -DENABLE_SECURITY=OFF
+sudo cmake --build /tmp/cyclonedds/build -j --target install
+git clone --depth 1 -b 0.10.2 https://github.com/eclipse-cyclonedds/cyclonedds-cxx.git /tmp/cyclonedds-cxx
+cmake -S /tmp/cyclonedds-cxx -B /tmp/cyclonedds-cxx/build \
+    -DCMAKE_INSTALL_PREFIX=/opt/cyclonedds -DCMAKE_PREFIX_PATH=/opt/cyclonedds \
+    -DCMAKE_BUILD_TYPE=Release -DBUILD_EXAMPLES=OFF
+sudo cmake --build /tmp/cyclonedds-cxx/build -j --target install
+```
 
 ### Install yaml-cpp
 
@@ -80,7 +113,7 @@ sudo apt install libyaml-cpp-dev
 CUDA 12.6 and TensorRT 10.7, per the NVIDIA guides:
 
 - https://developer.nvidia.com/cuda-12-6-0-download-archive
-- https://docs.nvidia.com/deeplearning/tensorrt/install-guide/
+- https://developer.nvidia.com/tensorrt/download/10x
 
 ## Build
 
@@ -152,3 +185,27 @@ kist::InputHandler::instance().nav_buf.SetData({vx, vy, vyaw});
 
 gearsonic_sys.stop();                             // publishes damping — call on every exit path
 ```
+
+## VLA mode (external latent tokens over DDS)
+
+[kist-vla-inference](https://github.com/Safety-Node/kist-vla-inference) can
+drive the whole body directly: it publishes 64-dim SONIC motion tokens +
+Dex3 hand targets as `kist_msgs::LatentActionStep` on `rt/kist/latent_action`
+(50 Hz), replacing the planner+encoder path.
+
+- **Contract**: `idl/kist_latent_action.idl` — shared with kist-vla-inference;
+  built into C++ types at build time by CycloneDDS `idlc` (0.10.2, matching
+  the SDK's bundled ddscxx — a required dependency, see Install CycloneDDS;
+  the Docker image includes it).
+- **Behavior**: first-come ownership (`include/control/robot_ownership.hpp`)
+  arbitrates VLA vs teleop — whichever claims the robot first keeps it.
+  A token fresher than 200 ms claims for VLA and switches
+  `WholeBodyController` into external-token mode (planner path bypassed);
+  if teleop calibrated first, VLA tokens are ignored until restart.
+  VLA ownership is sticky — a stream stale for 500 ms latches damping
+  rather than falling back to a stale planner motion or teleop. Under VLA
+  ownership its hand targets replace the VR trigger mapping. The VR grip
+  e-stop outranks everything, always.
+- **Interop probe**: `./build/vla_receiver_probe [domain_id] [iface]`
+  prints receive rate and newest token — pair it with kist-vla-inference
+  in `--io.action-transport dds` mode to verify the link without the robot.
