@@ -130,63 +130,28 @@ cmake -B build && cmake --build build
 
 ## Usage
 
-### 1. XRoboToolkit (PICO VR daemon)
+Set up the config once before running:
 
-With Docker, run this on the host, outside the container.
+- `config/config.yaml` — robot NIC (`unitree.network_interface`), DDS
+  domain, model paths.
+- All keys: [docs/configuration.md](docs/configuration.md).
 
-```bash
-source env.sh
-run_vr_daemon
-```
-
-Connect the headset from its XRoboToolkit app.
-
-### 2. Control
+**THE ROBOT MOVES on launch** — hang it or clear the area, keep the VR
+controller in reach (A+B+X+Y held 1s = emergency stop).
 
 ```bash
+# host: VR daemon (required in every mode — it carries the e-stop)
+source env.sh && run_vr_daemon
+
+# container: control (3s ramp to standing, then policy control)
 ./build/gearsonic_inference
 ```
 
-### Controller
+Both modes run from the same binary; ownership is first-come:
 
-| Input | Action |
-|---|---|
-| Left stick | Move (magnitude = speed) |
-| Right stick | Rotate facing |
-| A | Return to IDLE |
-| Y | Mode up (IDLE / Slow Walk / Walk) |
-| Trigger + Y | Mode up (hard actions, e.g. Run) |
-| X | Mode down |
-| Trigger + B / A | Height up / down (crouch modes) |
-| B held 1s | Teleop on / off (engage in the reference pose: forearms 90° forward, palms inward) |
-| Left / right grip (analog) | Left / right Dex3-1 thumb close (0 = open, 1 = pressed against fingers) |
-| Left / right trigger (analog) | Left / right Dex3-1 index+middle close (0 = open, 1 = cage / fist) |
-| A + B + X + Y held 1s | Emergency stop |
+- **Teleop mode** — joystick locomotion, VR arm/hand tracking:
+  [docs/teleop_mode.md](docs/teleop_mode.md)
+- **VLA mode** — external latent tokens from kist-vla-inference over DDS:
+  [docs/vla_mode.md](docs/vla_mode.md)
 
 > Embedding as a C++ library: [docs/embedding.md](docs/embedding.md)
-
-## VLA mode (external latent tokens over DDS)
-
-[kist-vla-inference](https://github.com/Safety-Node/kist-vla-inference) can
-drive the whole body directly: it publishes 64-dim SONIC motion tokens +
-Dex3 hand targets as `kist_msgs::LatentActionStep` on `rt/kist/latent_action`
-(50 Hz), replacing the planner+encoder path.
-
-- **Contract**: `idl/kist_latent_action.idl` — shared with kist-vla-inference;
-  built into C++ types at build time by CycloneDDS `idlc` (0.10.2, matching
-  the SDK's bundled ddscxx — a required dependency, see Install CycloneDDS;
-  the Docker image includes it).
-- **Behavior**: first-come ownership (`include/control/robot_ownership.hpp`)
-  arbitrates VLA vs teleop — whichever claims the robot first keeps it.
-  A token fresher than 200 ms claims for VLA and switches
-  `WholeBodyController` into external-token mode (planner path bypassed);
-  if teleop calibrated first, VLA tokens are ignored until restart.
-  VLA ownership is sticky — a stream stale for 500 ms counts as LOST and
-  the controller blends (1 s) to a verified safe standing token and keeps
-  balancing there, hands holding their last targets; neither a resumed
-  stream nor the planner path (its playback timeline froze at the pre-VLA
-  state) may retake the robot — restart to recover. The e-stop outranks
-  everything, always.
-- **Interop probe**: `./build/vla_receiver_probe [domain_id] [iface]`
-  prints receive rate and newest token — pair it with kist-vla-inference
-  in `--io.action-transport dds` mode to verify the link without the robot.
