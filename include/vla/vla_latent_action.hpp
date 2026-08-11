@@ -5,11 +5,14 @@
 
 namespace kist {
 
-// DDS topics shared with kist-vla-inference — must match the constants in
+// DDS topic shared with kist-vla-inference — must match the constants in
 // its kist_vla/io/dds.py. Named in the rt/kist/* convention used by
-// kist-ext-sensor-io. (Wire types: idl/kist_latent_action.idl.)
+// kist-ext-sensor-io. (Wire types: idl/kist_latent_action.idl. The
+// rt/kist/wbc_command topic defined there is RESERVED for the future
+// Orchestrator's lifecycle commands — no subscriber here yet; session
+// lifecycle currently rides the data plane: auto-start, stop-publishing ->
+// standing hold, VR e-stop -> damping.)
 inline constexpr const char* kVlaLatentActionTopic = "rt/kist/latent_action";
-inline constexpr const char* kVlaWbcCommandTopic   = "rt/kist/wbc_command";
 
 // Freshness thresholds for the external token stream (see
 // WholeBodyController::tick_vla_control):
@@ -31,14 +34,6 @@ struct VlaLatentAction {
     std::array<float, 7>  right_hand{};
     int64_t  frame_index{0};
     int64_t  stamp_ns{0};
-    uint64_t seq{0};
-};
-
-// Snapshot of the newest kist_msgs::WbcCommand.
-struct VlaCommand {
-    bool     start{false};
-    bool     stop{false};
-    bool     planner{false};
     uint64_t seq{0};
 };
 

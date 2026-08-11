@@ -31,9 +31,11 @@ module kist_msgs {
         float              right_hand_joints[7];
     };
 
-    // Control-loop lifecycle command (mirrors the ZMQ "command" topic):
-    // start/stop the whole-body control loop, planner vs pose mode, and an
-    // optional yaw offset relative to the heading command.
+    // Control-loop lifecycle command (mirrors the ZMQ "command" topic).
+    // RESERVED for the future Orchestrator — gearsonic has no subscriber
+    // yet: session lifecycle currently rides the data plane (auto-start;
+    // stop publishing -> standing hold; VR e-stop -> damping). Kept in the
+    // contract so the wire shape is settled before the Orchestrator lands.
     struct WbcCommand {
         unsigned long long seq;
         long long          stamp_ns;

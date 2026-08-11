@@ -258,8 +258,6 @@ void WholeBodyController::loop() try {
     while (!stop_) {
         auto t0 = clock::now();
 
-        poll_vla_command();
-
         // First-come ownership: teleop claims the robot while calibrated
         // and releases when calibration drops. (VLA claims/latches inside
         // tick_vla_control; the e-stop below outranks both.)
@@ -312,24 +310,6 @@ void WholeBodyController::loop() try {
 }
 
 // ─── VLA external-token mode ──────────────────────────────────────────────────
-
-void WholeBodyController::poll_vla_command() {
-    for (const auto& cmd : VlaTokenReceiver::instance().take_commands()) {
-        if (cmd.start) {
-            std::cout << "[WholeBodyController] VLA command: start (seq "
-                      << cmd.seq << ")\n";
-            operator_start_ = true;
-        }
-        if (cmd.stop) {
-            // Deliberately not wired to a state change yet: the VR grip
-            // e-stop is the authoritative stop path, and the semantics of a
-            // network stop (damping? hold? WAIT_FOR_CONTROL?) need a team
-            // decision.
-            std::cout << "[WholeBodyController] VLA command: stop (not acted "
-                         "on — use the VR e-stop; see poll_vla_command)\n";
-        }
-    }
-}
 
 bool WholeBodyController::tick_vla_control(std::chrono::steady_clock::time_point t0) {
     using clock = std::chrono::steady_clock;

@@ -45,10 +45,6 @@ int main(int argc, char** argv) {
     while (!g_quit) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        for (const auto& cmd : rx.take_commands())
-            std::printf("command drained: seq %llu start=%d stop=%d planner=%d\n",
-                        (unsigned long long)cmd.seq, cmd.start, cmd.stop, cmd.planner);
-
         const uint64_t count = rx.latent_received();
         auto v = rx.latent_buf.GetDataWithTime();
         if (v.HasData()) {
