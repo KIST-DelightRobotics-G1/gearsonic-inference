@@ -125,18 +125,21 @@ target_include_directories(control PUBLIC include)
 target_link_libraries(control PUBLIC tensorrt_inference planner_inference unitree_state_reader teleop_tracker vla_token_receiver)
 set_target_properties(control PROPERTIES CXX_STANDARD 20)
 
-# ─── gearsonic_system (system facade — the external C++ API) ─────────────────
-add_library(gearsonic_system STATIC
-    src/system/gearsonic_system.cpp
+# ─── gearsonic_inference (system facade — the external C++ API) ─────────────────
+add_library(gearsonic_inference STATIC
+    src/system/gearsonic_inference.cpp
 )
-target_include_directories(gearsonic_system PUBLIC include)
-target_link_libraries(gearsonic_system PUBLIC control unitree_command_writer hand_command_writer yaml-cpp)
-set_target_properties(gearsonic_system PROPERTIES CXX_STANDARD 20)
+target_include_directories(gearsonic_inference PUBLIC include)
+target_link_libraries(gearsonic_inference PUBLIC control unitree_command_writer hand_command_writer yaml-cpp)
+set_target_properties(gearsonic_inference PROPERTIES CXX_STANDARD 20)
 
 # ─── main ─────────────────────────────────────────────────────────────────────
+# Target stays `gearsonic` (the library target owns the gearsonic_inference
+# name — it is the embedders' link API); OUTPUT_NAME makes the binary itself
+# build/gearsonic_inference to match the repo name.
 add_executable(gearsonic src/main.cpp)
-target_link_libraries(gearsonic PRIVATE gearsonic_system)
-set_target_properties(gearsonic PROPERTIES CXX_STANDARD 20)
+target_link_libraries(gearsonic PRIVATE gearsonic_inference)
+set_target_properties(gearsonic PROPERTIES CXX_STANDARD 20 OUTPUT_NAME gearsonic_inference)
 
 # ─── tests ────────────────────────────────────────────────────────────────────
 add_executable(test_pico_vr_reader test/test_pico_vr_reader.cpp)

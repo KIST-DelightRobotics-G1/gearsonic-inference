@@ -1,13 +1,13 @@
 // Main deployment entry — THE ROBOT WILL MOVE on launch.
 //
-// All wiring and status live in GearsonicSystem; this binary only runs
+// All wiring and status live in GearsonicInference; this binary only runs
 // the lifecycle: start -> wait for Ctrl+C -> damping shutdown.
 //
 // Operator controls (see README):
 //   B held 1s    : teleop on (calibrate at reference pose) / off
 //   both grips 1s: emergency stop (latched, damping)
 
-#include "system/gearsonic_system.hpp"
+#include "system/gearsonic_inference.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -17,7 +17,7 @@
 int main(int argc, char** argv) {
     const std::string config_path = (argc >= 2) ? argv[1] : "config/config.yaml";
 
-    auto& sys = kist::GearsonicSystem::instance();
+    auto& sys = kist::GearsonicInference::instance();
     sys.install_signal_handlers();
 
     std::cout << "*** ROBOT WILL MOVE: 3s ramp to standing, then policy control ***\n";

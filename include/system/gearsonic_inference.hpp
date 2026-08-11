@@ -9,7 +9,7 @@ namespace kist {
 // order. Consumers (the gearsonic binary, an embedding repo) call this
 // instead of assembling the modules themselves.
 //
-//   GearsonicSystem::instance().start("config/config.yaml");
+//   GearsonicInference::instance().start("config/config.yaml");
 //     -> PicoVRReader -> InputHandler -> TeleopTracker
 //        -> UnitreeStateReader (waits for robot state)
 //        -> PlannerInference (+ playback provider wiring)
@@ -30,9 +30,9 @@ namespace kist {
 // Data in/out stays on the module singletons (this class is lifecycle
 // only): InputHandler::nav_buf, mode(), estop(),
 // WholeBodyController::state(), encoder_mode(), last_timing(), ...
-class GearsonicSystem {
+class GearsonicInference {
 public:
-    static GearsonicSystem& instance();
+    static GearsonicInference& instance();
 
     // Full-chain startup. Blocks until robot state is flowing, then the
     // INIT ramp and the policy handover proceed on their own. Returns
@@ -52,7 +52,7 @@ public:
     bool quit_requested() const { return quit_; }
 
 private:
-    GearsonicSystem() = default;
+    GearsonicInference() = default;
 
     // Which stages came up, so stop()/rollback only touches what runs.
     bool vr_started_{false};

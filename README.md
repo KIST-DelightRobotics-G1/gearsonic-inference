@@ -139,7 +139,7 @@ Connect the headset from its XRoboToolkit app.
 ### 2. Control
 
 ```bash
-./build/gearsonic
+./build/gearsonic_inference
 ```
 
 ### Controller
@@ -164,17 +164,17 @@ Embedding as a C++ library:
 
 ```cmake
 add_subdirectory(kist-gearsonic-inference)
-target_link_libraries(your_app PRIVATE gearsonic_system)
+target_link_libraries(your_app PRIVATE gearsonic_inference)
 ```
 
 ```cpp
-#include "system/gearsonic_system.hpp"
+#include "system/gearsonic_inference.hpp"
 #include "motion/input_handler.hpp"
 
-auto& gearsonic_sys = kist::GearsonicSystem::instance();
-gearsonic_sys.install_signal_handlers();          // or call gearsonic_sys.request_quit() from your own handler
+auto& gearsonic_inf = kist::GearsonicInference::instance();
+gearsonic_inf.install_signal_handlers();          // or call gearsonic_inf.request_quit() from your own handler
 
-if (!gearsonic_sys.start("config/config.yaml"))   // THE ROBOT MOVES: 3s ramp, then policy control
+if (!gearsonic_inf.start("config/config.yaml"))   // THE ROBOT MOVES: 3s ramp, then policy control
     return 1;
 
 // external navigation (optional): body-frame velocity, ~20Hz.
@@ -183,7 +183,7 @@ kist::InputHandler::instance().nav_buf.SetData({vx, vy, vyaw});
 
 // ... your application runs here (keep the process alive) ...
 
-gearsonic_sys.stop();                             // publishes damping — call on every exit path
+gearsonic_inf.stop();                             // publishes damping — call on every exit path
 ```
 
 ## VLA mode (external latent tokens over DDS)
