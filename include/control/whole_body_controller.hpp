@@ -65,6 +65,16 @@ private:
     void tick_control();
     void advance_playback();
 
+    // ── VLA external-token mode ─────────────────────────────────
+    // tick_vla_control returns true when it owned this tick (external
+    // token consumed, or damping because the stream was lost).
+    bool tick_vla_control(std::chrono::steady_clock::time_point t0);
+    bool vla_active_{false};
+    bool vla_stream_lost_{false};
+    bool vla_denied_logged_{false};
+    int  vla_loss_blend_tick_{0};
+    TokenEncoder::Token last_vla_token_{};
+
     TokenEncoder  encoder_;
     PolicyDecoder decoder_;
     StateLogger   logger_;

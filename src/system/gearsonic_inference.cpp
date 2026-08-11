@@ -1,4 +1,4 @@
-#include "system/gearsonic_system.hpp"
+#include "system/gearsonic_inference.hpp"
 
 #include "common/config.hpp"
 #include "control/whole_body_controller.hpp"
@@ -10,6 +10,8 @@
 #include "unitree/unitree_command_writer.hpp"
 #include "unitree/unitree_state_reader.hpp"
 
+#include "vla/vla_token_receiver.hpp"
+
 #include <chrono>
 #include <csignal>
 #include <exception>
@@ -18,16 +20,16 @@
 
 namespace kist {
 
-GearsonicSystem& GearsonicSystem::instance() {
-    static GearsonicSystem inst;
+GearsonicInference& GearsonicInference::instance() {
+    static GearsonicInference inst;
     return inst;
 }
 
-bool GearsonicSystem::start(const std::string& config_path) {
+bool GearsonicInference::start(const std::string& config_path) {
     try {
         Config::instance().load(config_path);
     } catch (const std::exception& e) {
-        std::cerr << "[GearsonicSystem] config load failed: " << e.what() << "\n";
+        std::cerr << "[GearsonicInference] config load failed: " << e.what() << "\n";
         return false;
     }
     auto root = Config::instance().root();
@@ -49,7 +51,16 @@ bool GearsonicSystem::start(const std::string& config_path) {
     }
     robot_started_ = true;
 
-    std::cout << "[GearsonicSystem] waiting for robot state...\n";
+    // VLA latent-action Rx rides the DDS factory UnitreeStateReader just
+    // initialized. Pure intake — nothing moves until tokens arrive AND the
+    // controller is in CONTROL (first-come ownership, robot_ownership.hpp).
+    if (!VlaTokenReceiver::instance().start()) {
+        stop();
+        return false;
+    }
+    vla_started_ = true;
+
+    std::cout << "[GearsonicInference] waiting for robot state...\n";
     while (!UnitreeStateReader::instance().unitree_state_buf.GetData()) {
         if (quit_) {
             stop();
@@ -94,11 +105,11 @@ bool GearsonicSystem::start(const std::string& config_path) {
     }
     control_started_ = true;
 
-    std::cout << "[GearsonicSystem] started — INIT ramp, then policy control\n";
+    std::cout << "[GearsonicInference] started — INIT ramp, then policy control\n";
     return true;
 }
 
-void GearsonicSystem::stop() {
+void GearsonicInference::stop() {
     // Reverse order. The controller flushes damping into the command
     // buffer, then the still-running writer publishes it before its own
     // stop() sends the final damping burst.
@@ -118,6 +129,10 @@ void GearsonicSystem::stop() {
         PlannerInference::instance().stop();
         planner_started_ = false;
     }
+    if (vla_started_) {
+        VlaTokenReceiver::instance().stop();
+        vla_started_ = false;
+    }
     if (vr_started_) {
         TeleopTracker::instance().stop();
         InputHandler::instance().stop();
@@ -135,10 +150,10 @@ void GearsonicSystem::stop() {
 // ── signals ───────────────────────────────────────────────────────────────────
 
 static void on_signal(int) {
-    GearsonicSystem::instance().request_quit();
+    GearsonicInference::instance().request_quit();
 }
 
-void GearsonicSystem::install_signal_handlers() {
+void GearsonicInference::install_signal_handlers() {
     std::signal(SIGINT, on_signal);
     std::signal(SIGTERM, on_signal);
 }

@@ -5,6 +5,9 @@
 #include "pico/pico_vr_reader.hpp"
 #include "teleop/teleop_tracker.hpp"
 
+#include "control/robot_ownership.hpp"
+#include "vla/vla_token_receiver.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <iostream>
@@ -51,6 +54,29 @@ static HandCommand from_grip_and_trigger(double grip, double trigger, bool is_le
         float close_q = is_left ? kDex3LeftClose[i] : kDex3RightClose[i];
         double t = (i < kFingerBegin) ? grip : trigger;
         cmd.q[i]  = open_q + static_cast<float>(t) * (close_q - open_q);
+        cmd.kp[i] = kHandKp;
+        cmd.kd[i] = kHandKd;
+    }
+    cmd.enabled = true;
+    return cmd;
+}
+
+// URDF joint limits from the SDK dex3 example (the reference table in
+// hand_command.hpp) — VLA joint targets are clamped into them.
+static constexpr std::array<float, 7> kDex3LeftMin  = {-1.05f, -0.724f,  0.00f, -1.57f, -1.75f, -1.57f, -1.75f};
+static constexpr std::array<float, 7> kDex3LeftMax  = { 1.05f,  1.05f,   1.75f,  0.00f,  0.00f,  0.00f,  0.00f};
+static constexpr std::array<float, 7> kDex3RightMin = {-1.05f, -1.05f,  -1.75f,  0.00f,  0.00f,  0.00f,  0.00f};
+static constexpr std::array<float, 7> kDex3RightMax = { 1.05f,  0.742f,  0.00f,  1.57f,  1.75f,  1.57f,  1.75f};
+
+// External VLA hand targets: already Dex3 motor order (thumb x3, index x2,
+// middle x2), absolute joint positions — clamp and publish with the same
+// PD gains as trigger tracking.
+static HandCommand from_vla_joints(const std::array<float, 7>& q, bool is_left) {
+    const auto& lo = is_left ? kDex3LeftMin : kDex3RightMin;
+    const auto& hi = is_left ? kDex3LeftMax : kDex3RightMax;
+    HandCommand cmd;
+    for (int i = 0; i < kMotorCount; ++i) {
+        cmd.q[i]  = std::clamp(q[i], lo[i], hi[i]);
         cmd.kp[i] = kHandKp;
         cmd.kd[i] = kHandKd;
     }
@@ -145,6 +171,18 @@ void HandCommandWriter::loop() {
         HandCommand left, right;
         if (InputHandler::instance().estop()) {
             left = right = stop_command();
+        } else if (auto vla = VlaTokenReceiver::instance().latent_buf.GetDataWithTime();
+                   RobotOwnership::instance().owner() == RobotOwnership::Owner::kVla &&
+                   vla.HasData()) {
+            // VLA owns the robot (first-come arbitration, see
+            // robot_ownership.hpp): its hand targets replace the VR trigger
+            // mapping. Deliberately no staleness check: if the token stream
+            // is lost the hands HOLD the last commanded targets (matching
+            // the body's standing hold) — a gripped object stays gripped
+            // instead of the fist/open fallbacks taking over. Under teleop
+            // ownership this branch never fires.
+            left  = from_vla_joints(vla.data->left_hand,  /*is_left=*/true);
+            right = from_vla_joints(vla.data->right_hand, /*is_left=*/false);
         } else if (hold_fist) {
             // Before teleop calibration the trigger/grip axes still serve
             // the locomotion UI (trigger+A/B height, extended mode list),

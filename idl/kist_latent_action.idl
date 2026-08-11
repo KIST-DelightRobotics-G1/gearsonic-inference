@@ -1,0 +1,49 @@
+// Latent-action DDS contract between kist-vla-inference (publisher) and
+// kist-gearsonic-inference (subscriber). Follows the kist-ext-sensor-io
+// custom-type conventions (module kist_msgs, seq / stamp_ns fields,
+// CycloneDDS idlc codegen: `idlc -l cxx` for C++, mirrored as IdlStruct
+// dataclasses in kist_vla/io/dds.py for Python — keep the two in sync).
+//
+// Topics (rt/kist/* per the ext-sensor-io convention; authoritative
+// constants: kist_vla/io/dds.py and gearsonic include/vla/vla_token_receiver.hpp):
+//   "rt/kist/latent_action"  LatentActionStep, Reliable + KeepLast(1), 50 Hz
+//   "rt/kist/wbc_command"    WbcCommand,       Reliable + KeepLast(8)
+//
+// Reader guidance (gearsonic side): pair the latent_action reader with a
+// Deadline QoS (e.g. 100 ms) so a stalled publisher trips a deadline-missed
+// event -> hold last token / damping, instead of hand-rolled staleness
+// checks. The stream pauses legitimately while the operator holds the
+// policy loop paused — treat deadline misses as "no fresh command", not as
+// a fault.
+
+module kist_msgs {
+
+    // One playback step of the VLA action chunk, published at the control
+    // rate (50 Hz). token_state is the SONIC latent motion token; hand
+    // joints are in Dex motor order (thumb x3, index x2, middle x2) —
+    // identical semantics to the ZMQ latent protocol v4 fields.
+    struct LatentActionStep {
+        unsigned long long seq;         // publisher-wide monotonic counter
+        long long          stamp_ns;    // publish clock (epoch ns)
+        long long          frame_index; // playback frame counter (resets on initial pose)
+        float              token_state[64];
+        float              left_hand_joints[7];
+        float              right_hand_joints[7];
+    };
+
+    // Control-loop lifecycle command (mirrors the ZMQ "command" topic).
+    // RESERVED for the future Orchestrator — gearsonic has no subscriber
+    // yet: session lifecycle currently rides the data plane (auto-start;
+    // stop publishing -> standing hold; VR e-stop -> damping). Kept in the
+    // contract so the wire shape is settled before the Orchestrator lands.
+    struct WbcCommand {
+        unsigned long long seq;
+        long long          stamp_ns;
+        boolean            start;
+        boolean            stop;
+        boolean            planner;
+        boolean            has_delta_heading;
+        float              delta_heading;  // radians; valid iff has_delta_heading
+    };
+
+};

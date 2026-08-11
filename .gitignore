@@ -5,3 +5,4 @@ thirdparty/*
 *.onnx
 *.engine
 *.trt
+build-*/

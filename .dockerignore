@@ -1,3 +1,15 @@
-# Nothing is COPYed into the image — sources are volume-mounted at run
-# time (see docker/run.sh), so the build context needs no files at all.
-*
+# Build artifacts — the container builds its own under build/.
+build/
+build-*/
+
+# VCS / local
+.git/
+.gitignore
+
+# Cloned/built/downloaded inside the image (pinned) — never copied from the
+# host, so the image needs no host-side vendoring and the context stays small.
+# (thirdparty/picosha2 is committed source and IS copied.)
+thirdparty/unitree_sdk2/
+thirdparty/XRoboToolkit-PC-Service/
+thirdparty/pxrea/
+models/
