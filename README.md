@@ -128,7 +128,7 @@ With Docker, run this inside the container (`./docker/run.sh`).
 cmake -B build && cmake --build build
 ```
 
-## Run
+## Usage
 
 ### 1. XRoboToolkit (PICO VR daemon)
 
@@ -163,33 +163,7 @@ Connect the headset from its XRoboToolkit app.
 | Left / right trigger (analog) | Left / right Dex3-1 index+middle close (0 = open, 1 = cage / fist) |
 | A + B + X + Y held 1s | Emergency stop |
 
-## Usage
-
-Embedding as a C++ library:
-
-```cmake
-add_subdirectory(kist-gearsonic-inference)
-target_link_libraries(your_app PRIVATE gearsonic_inference)
-```
-
-```cpp
-#include "system/gearsonic_inference.hpp"
-#include "motion/input_handler.hpp"
-
-auto& gearsonic_inf = kist::GearsonicInference::instance();
-gearsonic_inf.install_signal_handlers();          // or call gearsonic_inf.request_quit() from your own handler
-
-if (!gearsonic_inf.start("config/config.yaml"))   // THE ROBOT MOVES: 3s ramp, then policy control
-    return 1;
-
-// external navigation (optional): body-frame velocity, ~20Hz.
-// zeros = stop, going silent = fallback to manual. Joystick always wins.
-kist::InputHandler::instance().nav_buf.SetData({vx, vy, vyaw});
-
-// ... your application runs here (keep the process alive) ...
-
-gearsonic_inf.stop();                             // publishes damping — call on every exit path
-```
+> Embedding as a C++ library: [docs/embedding.md](docs/embedding.md)
 
 ## VLA mode (external latent tokens over DDS)
 
