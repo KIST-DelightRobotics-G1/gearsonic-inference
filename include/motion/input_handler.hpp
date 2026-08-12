@@ -24,16 +24,17 @@ public:
     // Arbitration is momentary: any joystick deflection wins instantly,
     // releasing the stick hands control back to nav on the next tick;
     // a stale/empty buffer falls back to manual. Nav is also ignored
-    // while the VR link is down — the grips are the e-stop, so nothing
-    // may drive the robot without them.
+    // while the VR link is down — the controller is the e-stop, so
+    // nothing may drive the robot without it.
     DataBuffer<NavCommand> nav_buf;
 
     // Selected locomotion mode — what the stick will trigger. The
     // published MovementState stays IDLE while the stick is in the
-    // deadzone, so displays should show this instead.
+    // deadzone (unless a fresh NavCommand is driving), so displays
+    // should show this instead.
     int mode() const { return mode_index_; }
 
-    // Emergency stop: latched once both grips are squeezed for 1s.
+    // Emergency stop: latched once A+B+X+Y are all held for 1s.
     // One-way — never clears until the process restarts. Deliberately an
     // atomic and not a DataBuffer: a stop request must not be clearable
     // or go stale.

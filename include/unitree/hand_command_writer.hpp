@@ -15,20 +15,25 @@ namespace kist {
 // shared with UnitreeStateReader/UnitreeCommandWriter (initialized by
 // UnitreeStateReader::start()).
 //
-// Input source: VR trigger values from PicoVRReader::ctrl_buf, mapped
-// linearly onto each hand's URDF joint range (open -> closed as the
-// trigger presses in). InputHandler is not on the path: the trigger
-// stream is orthogonal to the movement command it produces.
+// Input sources, highest priority first (mirroring the loop's branches):
+//  1. VLA ownership (robot_ownership.hpp): the token stream's hand joint
+//     targets replace the VR mapping and bypass the calibration gate; on
+//     stream loss the hands hold their last targets.
+//  2. VR grip/trigger values from PicoVRReader::ctrl_buf, mapped linearly
+//     onto each hand's URDF joint range (open -> closed as the axis
+//     presses in). InputHandler is not on the path: the analog axes are
+//     orthogonal to the movement command it produces.
 //
-// Gated by TeleopTracker::calibrated(): until teleop calibration engages,
-// the trigger/grip axes belong to the locomotion UI, so both hands hold
-// a closed fist; tracking starts kFistReleaseDelay after calibration
-// (the fist doesn't pop open the instant the gesture lands).
+// The VR path is gated by TeleopTracker::calibrated(): until teleop
+// calibration engages, the trigger/grip axes belong to the locomotion UI,
+// so both hands hold a closed fist; tracking starts kFistReleaseDelay
+// after calibration (the fist doesn't pop open the instant the gesture
+// lands).
 //
 // SAFETY:
 //  - InputHandler::estop() latched -> writer publishes stop mode
 //    (kp=0, kd=0, timeout bit) every tick.
-//  - stop() sends a stop burst before joining.
+//  - stop() sends a stop burst after the loop joins.
 //  - VR link lost (empty ctrl_buf) -> hands hold open pose with low PD.
 class HandCommandWriter {
 public:

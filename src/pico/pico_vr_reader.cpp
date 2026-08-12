@@ -97,7 +97,7 @@ static void pxrea_callback(void*, PXREAClientCallbackType type, int, void* user_
 //
 // The PXREA SDK is a gRPC client of the XRoboToolkit PC service
 // (RoboticsServiceProcess) listening on 127.0.0.1:60061. The daemon is run
-// manually on the host — see README "Running XRoboToolkit". We only probe
+// manually on the host — see docs/teleop_mode.md. We only probe
 // for it here: PXREAInit() succeeds even with no daemon (lazy gRPC channel),
 // so the port check is the one reliable way to fail fast with a clear error.
 
@@ -130,7 +130,7 @@ bool PicoVRReader::start() {
     if (!daemon_port_open()) {
         std::cerr << "[PicoVRReader] XRoboToolkit service not running on port "
                   << kDaemonPort << " — start it on the host first"
-                  << " (see README: Running XRoboToolkit)\n";
+                  << " (see docs/teleop_mode.md)\n";
         return false;
     }
 

@@ -41,10 +41,10 @@ static inline uint8_t ris_mode(uint8_t id, bool enable) {
 // thumb-only pinch (grip only), a finger cage (trigger only), or a full
 // power grip (both) — mapped onto the natural hand-on-controller pose.
 //
-// The endpoints come from kDex3{Left,Right}{Open,Close} — thumb crosses
-// zero (bidirectional joints), fingers pivot around zero on one side
-// (unidirectional flexion). See hand_command.hpp for the empirical
-// convention.
+// The endpoints come from kDex3{Left,Right}{Open,Close} — the thumb bend
+// (motor 1) crosses zero, the rest pivot on one side of zero, and the
+// thumb rotation (motor 0) is pinned at center. See hand_command.hpp for
+// the empirical convention.
 static HandCommand from_grip_and_trigger(double grip, double trigger, bool is_left) {
     grip    = std::clamp(grip,    0.0, 1.0);
     trigger = std::clamp(trigger, 0.0, 1.0);

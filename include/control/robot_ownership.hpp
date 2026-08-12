@@ -12,11 +12,12 @@ namespace kist {
 //     are ignored for as long as the owner holds.
 //   - Teleop claims on calibration and releases when calibration drops.
 //   - VLA claims on its first fresh token and NEVER auto-releases: if the
-//     stream dies the controller latches damping (a stale planner motion or
-//     a mid-task teleop takeover would be an uncommanded movement) — VLA
-//     ownership ends only with a process restart.
-//   - The VR grip e-stop is NOT part of this arbitration: it overrides
-//     everything, always, in both control loops.
+//     stream dies the controller blends to the safe standing token and
+//     keeps balancing there (a stale planner motion or a mid-task teleop
+//     takeover would be an uncommanded movement) — VLA ownership ends only
+//     with a process restart.
+//   - The VR e-stop (A+B+X+Y held 1s) is NOT part of this arbitration: it
+//     overrides everything, always, in both control loops.
 //
 // Header-only and lock-free so any module (control, hand writer) can consult
 // it without new link dependencies.

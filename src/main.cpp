@@ -4,8 +4,8 @@
 // the lifecycle: start -> wait for Ctrl+C -> damping shutdown.
 //
 // Operator controls (see README):
-//   B held 1s    : teleop on (calibrate at reference pose) / off
-//   both grips 1s: emergency stop (latched, damping)
+//   B held 1s      : teleop on (calibrate at reference pose) / off
+//   A+B+X+Y held 1s: emergency stop (latched, damping)
 
 #include "system/gearsonic_inference.hpp"
 

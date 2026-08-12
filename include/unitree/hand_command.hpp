@@ -16,8 +16,9 @@ struct HandCommand {
 };
 
 // Dex3-1 is a 3-finger gripper (thumb + index + middle) with 7 motors:
-//   0..2  -> thumb   (3 DOF, bidirectional joints — matches SDK limit
-//                    signs: ±1.05, ±0.72, ±1.75)
+//   0     -> thumb rotation (±1.05, symmetric on both hands)
+//   1     -> thumb bend     (bidirectional, asymmetric limits per hand)
+//   2     -> thumb flexion  (unidirectional, 0..1.75 L / -1.75..0 R)
 //   3..4  -> index   (2 DOF, unidirectional flexion — 0..±1.57 / ±1.75)
 //   5..6  -> middle  (2 DOF, unidirectional flexion)
 // The split lets the two controller analog axes drive anatomically
@@ -27,10 +28,10 @@ inline constexpr int kFingerBegin = 3;
 inline constexpr int kMotorEnd    = 7;
 
 // Explicit open/closed endpoints (empirically confirmed on the real hand):
-//   thumb (0..2) is bidirectional — open/close sit on opposite signs;
-//   fingers (3..6) are unidirectional flexion — 0 is extended (open),
-//   the signed extreme is curled (closed). Both hands share the same
-//   convention (0 = open) for the fingers; only the sign flips.
+//   the thumb bend (1) is bidirectional — open/close sit on opposite
+//   signs; the thumb flexion (2) and the fingers (3..6) are unidirectional
+//   — 0 is extended (open), the signed extreme is curled (closed). Both
+//   hands share the same convention (0 = open); only the sign flips.
 //
 // URDF joint limits from unitree_sdk2 example/g1/dex3/g1_dex3_example.cpp
 // are kept for reference — the endpoints below lie within them.

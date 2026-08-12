@@ -5,16 +5,17 @@
 // dataclasses in kist_vla/io/dds.py for Python — keep the two in sync).
 //
 // Topics (rt/kist/* per the ext-sensor-io convention; authoritative
-// constants: kist_vla/io/dds.py and gearsonic include/vla/vla_token_receiver.hpp):
+// constants: kist_vla/io/dds.py and gearsonic include/vla/vla_latent_action.hpp):
 //   "rt/kist/latent_action"  LatentActionStep, Reliable + KeepLast(1), 50 Hz
 //   "rt/kist/wbc_command"    WbcCommand,       Reliable + KeepLast(8)
 //
-// Reader guidance (gearsonic side): pair the latent_action reader with a
-// Deadline QoS (e.g. 100 ms) so a stalled publisher trips a deadline-missed
-// event -> hold last token / damping, instead of hand-rolled staleness
-// checks. The stream pauses legitimately while the operator holds the
-// policy loop paused — treat deadline misses as "no fresh command", not as
-// a fault.
+// Reader behavior (gearsonic side, whole_body_controller.cpp): staleness is
+// checked against the receive clock — a token fresher than 200 ms claims the
+// robot for VLA; once claimed, a stream stale for 500 ms is LOST: the
+// controller blends to a safe standing token, holds there, and the VLA
+// session is over until the process restarts. Publishers must NOT pause the
+// stream mid-session expecting to resume — keep publishing (repeat the last
+// step or the standing token) for any intentional hold.
 
 module kist_msgs {
 
