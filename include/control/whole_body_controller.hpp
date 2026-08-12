@@ -67,7 +67,8 @@ private:
 
     // ── VLA external-token mode ─────────────────────────────────
     // tick_vla_control returns true when it owned this tick (external
-    // token consumed, or damping because the stream was lost).
+    // token consumed, or holding the safe standing blend after the
+    // stream was lost).
     bool tick_vla_control(std::chrono::steady_clock::time_point t0);
     bool vla_active_{false};
     bool vla_stream_lost_{false};

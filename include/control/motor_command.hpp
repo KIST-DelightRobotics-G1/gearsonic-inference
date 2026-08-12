@@ -6,7 +6,7 @@ namespace kist {
 
 // Per-motor PD command, MuJoCo/DDS motor order.
 // Produced by the 50Hz WholeBodyController into a DataBuffer<MotorCommand>;
-// consumed by the (future) 500Hz LowCmd writer.
+// consumed by the 500Hz UnitreeCommandWriter (rt/lowcmd).
 struct MotorCommand {
     std::array<float, 29> q_target{};   // target joint position (rad)
     std::array<float, 29> dq_target{};  // target joint velocity (0, matches gear_sonic)

@@ -320,7 +320,8 @@ bool WholeBodyController::tick_vla_control(std::chrono::steady_clock::time_point
             return false;  // no live stream — planner path as usual
 
         // First-come ownership: if teleop already holds the robot, ignore
-        // the token stream entirely (log once per denied stream).
+        // the token stream entirely (logged once per process — the flag
+        // never resets).
         if (!RobotOwnership::instance().try_claim(RobotOwnership::Owner::kVla)) {
             if (!vla_denied_logged_) {
                 std::cout << "[WholeBodyController] VLA tokens arriving but teleop "

@@ -35,8 +35,8 @@ bool GearsonicInference::start(const std::string& config_path) {
     auto root = Config::instance().root();
 
     // ── input stack (nothing moves yet) ─────────────────────────
-    // VR is mandatory: the joystick drives the planner and the grips
-    // are the operator e-stop.
+    // VR is mandatory: the joystick drives the planner and the
+    // controller (A+B+X+Y held 1s) is the operator e-stop.
     if (!PicoVRReader::instance().start())
         return false;
     vr_started_ = true;
@@ -110,9 +110,9 @@ bool GearsonicInference::start(const std::string& config_path) {
 }
 
 void GearsonicInference::stop() {
-    // Reverse order. The controller flushes damping into the command
-    // buffer, then the still-running writer publishes it before its own
-    // stop() sends the final damping burst.
+    // Controller first. It flushes damping into the command buffer,
+    // then the still-running writer publishes it before its own stop()
+    // sends the final damping burst.
     if (control_started_) {
         WholeBodyController::instance().stop();
         control_started_ = false;

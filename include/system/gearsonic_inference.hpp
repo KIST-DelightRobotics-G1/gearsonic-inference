@@ -11,9 +11,9 @@ namespace kist {
 //
 //   GearsonicInference::instance().start("config/config.yaml");
 //     -> PicoVRReader -> InputHandler -> TeleopTracker
-//        -> UnitreeStateReader (waits for robot state)
+//        -> UnitreeStateReader (waits for robot state) -> VlaTokenReceiver
 //        -> PlannerInference (+ playback provider wiring)
-//        -> UnitreeCommandWriter -> WholeBodyController
+//        -> UnitreeCommandWriter -> HandCommandWriter -> WholeBodyController
 //        -> 3s INIT ramp -> policy control, no further calls needed.
 //
 // *** Calling start() means the robot WILL MOVE. *** Gating (operator
@@ -39,8 +39,8 @@ public:
     // false (with everything already-started rolled back) on any failure.
     bool start(const std::string& config_path);
 
-    // Reverse-order shutdown; publishes damping before the writer stops.
-    // Idempotent — safe to call after a failed start() or twice.
+    // Shutdown, controller first; publishes damping before the writer
+    // stops. Idempotent — safe to call after a failed start() or twice.
     void stop();
 
     // Optional: SIGINT/SIGTERM -> quit_requested() becomes true. The
