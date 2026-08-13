@@ -41,7 +41,11 @@ Connect the headset from its XRoboToolkit app.
 
 ## Ownership vs VLA
 
-Teleop and the VLA token stream share the robot under first-come ownership:
-whoever claims first keeps it. Calibrating teleop (B held 1s) claims the
-robot — VLA tokens arriving afterwards are ignored until restart. See
+Teleop and the VLA token stream share the robot first-come: whoever claims
+first keeps it until it lets go, and every exit lands back at the origin
+(planner idle). Calibrating teleop (B held 1s) claims the robot — VLA
+tokens are ignored while you hold it. Toggling teleop off returns the robot
+to the origin; if the VLA stream is still publishing, it takes over from
+there. While VLA holds the robot, B is ignored — to take over, stop the
+VLA publisher, let the robot recover to standing, then calibrate. See
 [vla_mode.md](vla_mode.md) for the VLA side of the arbitration.

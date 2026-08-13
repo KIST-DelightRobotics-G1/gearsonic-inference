@@ -14,11 +14,12 @@ namespace kist {
 // standing hold, VR e-stop -> damping.)
 inline constexpr const char* kVlaLatentActionTopic = "rt/kist/latent_action";
 
-// Freshness thresholds for the external token stream (see
-// WholeBodyController::tick_vla_control):
-//   fresh  — a token this recent switches the controller into VLA mode
+// Freshness thresholds for the external token stream (consumed by
+// WholeBodyController::update_arbiter, see control_arbiter.hpp):
+//   fresh  — a token this recent claims the robot for VLA (from the origin)
 //   hold   — beyond this age in VLA mode, the stream counts as LOST; the
-//            controller then blends to the safe standing token and holds
+//            controller blends to the safe standing token, reseeds the
+//            planner, and returns to the origin
 //            (kVlaSafeStandingToken; ticks below set the blend length)
 inline constexpr double kVlaTokenFreshMs    = 200.0;
 inline constexpr double kVlaTokenHoldMs     = 500.0;

@@ -11,11 +11,12 @@
 //
 // Reader behavior (gearsonic side, whole_body_controller.cpp): staleness is
 // checked against the receive clock — a token fresher than 200 ms claims the
-// robot for VLA; once claimed, a stream stale for 500 ms is LOST: the
-// controller blends to a safe standing token, holds there, and the VLA
-// session is over until the process restarts. Publishers must NOT pause the
-// stream mid-session expecting to resume — keep publishing (repeat the last
-// step or the standing token) for any intentional hold.
+// robot for VLA; once claimed, a stream stale for 500 ms is LOST and ends
+// the session: the controller blends to a safe standing token, reseeds its
+// planner, and returns to the origin (robot standing, locomotion disarmed).
+// A resumed stream re-claims from there — no restart needed — but do NOT
+// pause mid-session expecting to keep the session: keep publishing (repeat
+// the last step or the standing token) for any intentional hold.
 
 module kist_msgs {
 

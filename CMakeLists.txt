@@ -169,6 +169,10 @@ set_target_properties(test_stage_probe PROPERTIES CXX_STANDARD 20)
 add_executable(test_teleop_probe test/test_teleop_probe.cpp)
 target_link_libraries(test_teleop_probe PRIVATE teleop_tracker)
 
+# header-only state machine — no link dependencies
+add_executable(test_arbiter_probe test/test_arbiter_probe.cpp)
+target_include_directories(test_arbiter_probe PRIVATE include)
+
 add_executable(vla_receiver_probe test/vla_receiver_probe.cpp)
 target_link_libraries(vla_receiver_probe PRIVATE vla_token_receiver)
 

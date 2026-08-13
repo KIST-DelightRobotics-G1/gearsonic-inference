@@ -5,7 +5,7 @@
 #include "pico/pico_vr_reader.hpp"
 #include "teleop/teleop_tracker.hpp"
 
-#include "control/robot_ownership.hpp"
+#include "control/control_arbiter.hpp"
 #include "vla/vla_token_receiver.hpp"
 
 #include <algorithm>
@@ -169,18 +169,20 @@ void HandCommandWriter::loop() {
         bool hold_fist = !calibrated || (t0 - calibrated_at) < kFistReleaseDelay;
 
         HandCommand left, right;
+        auto arb_mode = ControlArbiter::instance().mode();
         if (InputHandler::instance().estop()) {
             left = right = stop_command();
         } else if (auto vla = VlaTokenReceiver::instance().latent_buf.GetDataWithTime();
-                   RobotOwnership::instance().owner() == RobotOwnership::Owner::kVla &&
+                   (arb_mode == ControlArbiter::Mode::kVla ||
+                    arb_mode == ControlArbiter::Mode::kRecovering) &&
                    vla.HasData()) {
-            // VLA owns the robot (first-come arbitration, see
-            // robot_ownership.hpp): its hand targets replace the VR trigger
-            // mapping. Deliberately no staleness check: if the token stream
-            // is lost the hands HOLD the last commanded targets (matching
-            // the body's standing hold) — a gripped object stays gripped
-            // instead of the fist/open fallbacks taking over. Under teleop
-            // ownership this branch never fires.
+            // VLA holds the robot (see control_arbiter.hpp): its hand
+            // targets replace the VR trigger mapping. Deliberately no
+            // staleness check: through the recovery hold the hands KEEP the
+            // last commanded targets (matching the body's standing hold) —
+            // a gripped object stays gripped until the origin is re-entered
+            // and the fist/open fallbacks take over. Under teleop ownership
+            // this branch never fires.
             left  = from_vla_joints(vla.data->left_hand,  /*is_left=*/true);
             right = from_vla_joints(vla.data->right_hand, /*is_left=*/false);
         } else if (hold_fist) {

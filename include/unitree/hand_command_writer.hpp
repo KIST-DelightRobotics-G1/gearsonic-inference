@@ -16,9 +16,10 @@ namespace kist {
 // UnitreeStateReader::start()).
 //
 // Input sources, highest priority first (mirroring the loop's branches):
-//  1. VLA ownership (robot_ownership.hpp): the token stream's hand joint
-//     targets replace the VR mapping and bypass the calibration gate; on
-//     stream loss the hands hold their last targets.
+//  1. VLA ownership (control_arbiter.hpp): the token stream's hand joint
+//     targets replace the VR mapping and bypass the calibration gate;
+//     through the recovery hold the hands keep their last targets, then
+//     the fallbacks below take over at the origin.
 //  2. VR grip/trigger values from PicoVRReader::ctrl_buf, mapped linearly
 //     onto each hand's URDF joint range (open -> closed as the axis
 //     presses in). InputHandler is not on the path: the analog axes are

@@ -65,16 +65,23 @@ private:
     void tick_control();
     void advance_playback();
 
-    // ── VLA external-token mode ─────────────────────────────────
-    // tick_vla_control returns true when it owned this tick (external
-    // token consumed, or holding the safe standing blend after the
-    // stream was lost).
-    bool tick_vla_control(std::chrono::steady_clock::time_point t0);
-    bool vla_active_{false};
-    bool vla_stream_lost_{false};
-    bool vla_denied_logged_{false};
-    int  vla_loss_blend_tick_{0};
-    TokenEncoder::Token last_vla_token_{};
+    // ── arbitration (see control_arbiter.hpp) ──────────────────
+    // This loop is the ControlArbiter stage's single writer:
+    // update_arbiter() runs step_mode() each CONTROL tick and applies the
+    // EXTERNAL side effects of a transition (calibration reset, playback
+    // reset, locomotion disarm, planner reseed ticket, logs) — the token
+    // selection and blends live inside the stage. tick_vla feeds it the
+    // stream's token; tick_recovery lets it hold the standing blend while
+    // this loop reseeds the planner so kNormal resumes from a fresh origin
+    // (never the frozen pre-VLA timeline).
+    void update_arbiter();
+    void tick_vla(std::chrono::steady_clock::time_point t0);
+    void tick_recovery(std::chrono::steady_clock::time_point t0);
+    void decode_and_publish(const TokenEncoder::Token& token,
+                            std::chrono::steady_clock::time_point t0);
+
+    bool     reinit_ticket_issued_{false};    // planner reseed asked this recovery
+    uint64_t reinit_ticket_{0};               // planner ack target
 
     TokenEncoder  encoder_;
     PolicyDecoder decoder_;
