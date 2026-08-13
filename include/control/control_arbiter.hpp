@@ -97,7 +97,11 @@ public:
         if (next != cur) {
             if (next == Mode::kRecovering)
                 recovery_blend_tick_ = 0;
-            if (cur == Mode::kRecovering && next == Mode::kNormal)
+            // Any handover onto a fresh token source slides instead of
+            // stepping: recovery -> origin (encoder resumes) and origin ->
+            // VLA (the stream's token replaces the encoder's).
+            if ((cur == Mode::kRecovering && next == Mode::kNormal) ||
+                next == Mode::kVla)
                 handoff_blend_ticks_ = kHandoffBlendTicks;
             mode_.store(next);
         }
@@ -110,14 +114,32 @@ public:
         return recovery_blend_tick_ >= kRecoveryBlendTicks;
     }
 
+    // Arm the handoff crossfade outside a recovery exit — the controller
+    // calls this when the encoder's target steps (teleop engage/disengage
+    // flips the encoder mode, jumping the upper-body reference), so the
+    // next kHandoffBlendTicks outputs slide from the last commanded token
+    // instead of stepping.
+    void arm_handoff() { handoff_blend_ticks_ = kHandoffBlendTicks; }
+
     // Exactly one token out per tick. Pass the token the current mode
     // produces (encoder's in kNormal/kTeleop, the stream's in kVla,
     // nothing in kRecovering); the blends are applied here.
     Token select_token(const Token* encoder_token, const Token* vla_token) {
         switch (mode_.load()) {
-            case Mode::kVla:
-                held_token_ = *vla_token;
-                return held_token_;
+            case Mode::kVla: {
+                // Claim handoff: slide from the last commanded token into
+                // the stream's over the armed window, then pass through.
+                Token out = *vla_token;
+                if (handoff_blend_ticks_ > 0) {
+                    float w = 1.0f - static_cast<float>(handoff_blend_ticks_)
+                                         / kHandoffBlendTicks;
+                    for (size_t i = 0; i < out.size(); ++i)
+                        out[i] = (1.0f - w) * held_token_[i] + w * out[i];
+                    --handoff_blend_ticks_;
+                }
+                held_token_ = out;
+                return out;
+            }
             case Mode::kRecovering: {
                 // Blend the last commanded token to the verified safe
                 // standing token and keep balancing there; track the hold
@@ -131,8 +153,10 @@ public:
                 return held_token_;
             }
             default: {
-                // Fresh out of recovery: crossfade from the standing hold
-                // so the switch back to the encoder is not a step input.
+                // Crossfade into the encoder's token whenever a handoff is
+                // armed (recovery exit, teleop engage/disengage); otherwise
+                // a pass-through. held_token_ tracks every commanded token
+                // so an armed blend always starts from the last output.
                 Token out = *encoder_token;
                 if (handoff_blend_ticks_ > 0) {
                     float w = 1.0f - static_cast<float>(handoff_blend_ticks_)
@@ -141,19 +165,23 @@ public:
                         out[i] = (1.0f - w) * held_token_[i] + w * out[i];
                     --handoff_blend_ticks_;
                 }
+                held_token_ = out;
                 return out;
             }
         }
     }
 
     static constexpr int kRecoveryBlendTicks = kVlaLossBlendTicks;  // 1s at 50Hz
-    static constexpr int kHandoffBlendTicks  = 25;                  // 0.5s at 50Hz
+    static constexpr int kHandoffBlendTicks  = 35;                  // 0.7s at 50Hz
 
 private:
     std::atomic<Mode> mode_{Mode::kNormal};
 
-    // Blend state (single-writer: the controller's tick)
-    Token held_token_{};          // last commanded token (VLA / standing hold)
+    // Blend state (single-writer: the controller's tick). held_token_
+    // tracks every commanded token; before the first command it defaults
+    // to the safe standing token so an early claim never blends from a
+    // meaningless zero latent.
+    Token held_token_ = kVlaSafeStandingToken;
     int   recovery_blend_tick_{0};
     int   handoff_blend_ticks_{0};
 };

@@ -234,8 +234,18 @@ void WholeBodyController::tick_control() {
     }
 
     // Teleop upper-body target: buffer presence selects the encoder mode
-    // (empty until calibrated, cleared when body tracking drops -> g1).
+    // (empty until calibrated; through a body-stream dropout it holds the
+    // last target, so the arms freeze in place instead of snapping to g1).
     auto vr3 = TeleopTracker::instance().vr3point_buf.GetData();
+
+    // Teleop engage/disengage steps the encoder's upper-body reference
+    // (planner pose <-> operator pose) — slide the token across the step
+    // instead of letting the arms jump.
+    bool vr3_present = static_cast<bool>(vr3);
+    if (vr3_present != last_vr3_present_) {
+        last_vr3_present_ = vr3_present;
+        ControlArbiter::instance().arm_handoff();
+    }
 
     TokenEncoder::Token token;
     if (!encoder_.step(*motion, cursor, playing_, logger_, vr3.get(), token))

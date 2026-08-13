@@ -16,8 +16,10 @@ public:
     void                 stop();
 
     // ── data buffers (read from any thread) ────────────────────
-    // Link liveness is the buffers themselves: the watchdog clears a
-    // stream's buffer when it goes stale, and consumers key off "has data".
+    // Link liveness: the watchdog clears the CONTROLLER buffer when its
+    // stream goes stale (consumers safe-stop off "no data"); the BODY
+    // buffer holds its last sample so the teleoperated upper body freezes
+    // in place through a dropout instead of snapping away and back.
     DataBuffer<PicoVRBodyPose>        body_buf;
     DataBuffer<PicoVRController>      ctrl_buf;
 

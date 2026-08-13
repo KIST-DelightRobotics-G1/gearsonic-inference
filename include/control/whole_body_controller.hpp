@@ -82,6 +82,7 @@ private:
 
     bool     reinit_ticket_issued_{false};    // planner reseed asked this recovery
     uint64_t reinit_ticket_{0};               // planner ack target
+    bool     last_vr3_present_{false};        // teleop engage/disengage edge
 
     TokenEncoder  encoder_;
     PolicyDecoder decoder_;

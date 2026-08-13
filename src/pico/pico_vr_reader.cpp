@@ -170,12 +170,12 @@ void PicoVRReader::watchdog_loop() {
     while (!stop_watchdog_) {
         std::this_thread::sleep_for(14ms);
 
-        auto body = body_buf.GetDataWithTime();
-        if (body.HasData() && body.GetAgeMs() > stale_ms) {
-            std::cerr << "[PicoVRReader] body stream stale — cleared\n";
-            body_buf.Clear();
-        }
-
+        // Only the controller stream is cleared on stale: buttons and
+        // sticks must never act on old values (locomotion safe-stops off
+        // the empty buffer). The body pose deliberately HOLDS its last
+        // sample instead — a WiFi hiccup then freezes the teleoperated
+        // arms in place rather than snapping them to the planner pose and
+        // back; recovery is seamless when the stream resumes.
         auto ctrl = ctrl_buf.GetDataWithTime();
         if (ctrl.HasData() && ctrl.GetAgeMs() > stale_ms) {
             std::cerr << "[PicoVRReader] controller stream stale — cleared\n";

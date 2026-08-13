@@ -89,7 +89,8 @@ void TeleopTracker::loop() {
 
         auto body = PicoVRReader::instance().body_buf.GetDataWithTime();
         if (!body.HasData()) {
-            // body tracking absent/stale — no teleop target
+            // no body sample yet this session (the reader holds the last
+            // one through dropouts, so this only fires before the first)
             vr3point_buf.Clear();
         } else if (body.timestamp != last_body_time_) {
             last_body_time_ = body.timestamp;

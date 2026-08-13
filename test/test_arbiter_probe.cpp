@@ -102,8 +102,34 @@ int main() {
             encoder_token[i] = -1.0f + 0.03f * static_cast<float>(i);
         }
 
+        // Claim arms the entry handoff: the first outputs slide from the
+        // held token (standing default) into the stream's instead of
+        // stepping onto it.
         arb.step_mode(true, true, false, false);                    // claim
-        Arb::Token prev = arb.select_token(nullptr, &stream_token); // = stream
+        Arb::Token prev = kist::kVlaSafeStandingToken;
+        float claim_gap = 0.0f;
+        for (size_t i = 0; i < prev.size(); ++i)
+            claim_gap = std::fmax(claim_gap,
+                                  std::fabs(stream_token[i] - prev[i]));
+        float claim_worst = 0.0f;
+        Arb::Token cur{};
+        for (int t = 0; t <= Arb::kHandoffBlendTicks; ++t) {
+            cur = arb.select_token(nullptr, &stream_token);
+            for (size_t i = 0; i < cur.size(); ++i)
+                claim_worst = std::fmax(claim_worst, std::fabs(cur[i] - prev[i]));
+            prev = cur;
+        }
+        bool claim_converged = true;
+        for (size_t i = 0; i < cur.size(); ++i)
+            if (std::fabs(cur[i] - stream_token[i]) > 1e-5f)
+                claim_converged = false;
+        if (!claim_converged || claim_worst > claim_gap * 0.25f) {
+            std::printf("FAIL claim blend: converged=%d worst_step=%.4f limit=%.4f\n",
+                        claim_converged, claim_worst, claim_gap * 0.25f);
+            ++failures;
+        } else {
+            std::printf("ok   claim blend: continuous, converges to the stream token\n");
+        }
 
         float max_gap = 0.0f;
         for (size_t i = 0; i < prev.size(); ++i)

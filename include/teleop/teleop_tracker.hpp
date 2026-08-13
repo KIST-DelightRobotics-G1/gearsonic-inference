@@ -25,8 +25,11 @@ namespace kist {
 //      the G1 zero-pose FK wrist poses; neck position from a fixed
 //      kinematic chain (root -> torso +Z -> neck along its local Z)
 //
-// vr3point_buf is only published while calibrated and body data is live;
-// otherwise it is cleared — consumers key off "has data" to gate teleop.
+// vr3point_buf is only published while calibrated — cleared on reset /
+// teleop off; consumers key off "has data" to gate teleop. A body-stream
+// dropout does NOT clear it: the reader holds the last body sample, so the
+// last teleop target stays published and the arms freeze in place until
+// the stream resumes.
 class TeleopTracker {
 public:
     static TeleopTracker& instance();
