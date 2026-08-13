@@ -145,6 +145,9 @@ set_target_properties(gearsonic PROPERTIES CXX_STANDARD 20 OUTPUT_NAME gearsonic
 add_executable(test_pico_vr_reader test/test_pico_vr_reader.cpp)
 target_link_libraries(test_pico_vr_reader PRIVATE pico_vr_reader)
 
+add_executable(vr_link_monitor test/vr_link_monitor.cpp)
+target_link_libraries(vr_link_monitor PRIVATE pico_vr_reader)
+
 add_executable(test_unitree_state_reader test/test_unitree_state_reader.cpp)
 target_link_libraries(test_unitree_state_reader PRIVATE unitree_state_reader yaml-cpp)
 
