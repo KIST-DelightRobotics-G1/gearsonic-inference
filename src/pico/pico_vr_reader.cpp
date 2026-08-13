@@ -165,7 +165,11 @@ void PicoVRReader::on_controller_update(const PicoVRController& ctrl) {
 // dies — InputHandler's safe-stop (IDLE) triggers off an empty ctrl_buf.
 void PicoVRReader::watchdog_loop() {
     using namespace std::chrono_literals;
-    constexpr double stale_ms = 145.0;  // 10 frames at 70Hz (worst case, low battery)
+    // Rides out the measured WiFi hiccups (150-321ms bursts on a weak
+    // signal, vr_link_monitor 2026-08) instead of safe-stopping through
+    // every one; the cost is acting on a frozen stick for up to 350ms on
+    // a real link loss (~0.2m at slow walk) before the IDLE stop lands.
+    constexpr double stale_ms = 350.0;
 
     while (!stop_watchdog_) {
         std::this_thread::sleep_for(14ms);

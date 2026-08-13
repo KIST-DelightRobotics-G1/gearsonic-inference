@@ -217,10 +217,10 @@ void InputHandler::loop() {
         } else {
             // VR link lost (stale watchdog cleared ctrl_buf) → safe stop:
             // IDLE with mode-default speed/height. Keep the current facing so
-            // the robot doesn't turn toward yaw 0 while idling. Also disarm
-            // the selected mode — after the link recovers, walking requires
-            // an explicit mode selection again.
-            mode_index_ = 0;
+            // the robot doesn't turn toward yaw 0 while idling. The selected
+            // mode stays armed — when the link recovers, the stick drives
+            // again without re-selecting (the 350ms stale window already
+            // absorbs ordinary WiFi hiccups; this covers the longer ones).
             std::array<double, 3> face{std::cos(facing_angle_), std::sin(facing_angle_), 0.0};
             movement_buf.SetData(MovementState(
                 static_cast<int>(LocomotionMode::IDLE), {0.0, 0.0, 0.0}, face, -1.0, -1.0));
