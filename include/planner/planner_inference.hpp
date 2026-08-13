@@ -42,6 +42,15 @@ public:
         playback_provider_ = std::move(provider);
     }
 
+    // ── reseed (VLA -> origin recovery) ────────────────────────
+    // Drop the (stale) planning context and re-run the startup
+    // initialization: clear the published motion, reseed the context from
+    // the measured joints, publish a fresh IDLE sequence. Returns a ticket;
+    // the reseed is complete once reinit_done() >= that ticket. Any motion
+    // published after completion is guaranteed post-reseed.
+    uint64_t request_reinit() { return ++reinit_requested_; }
+    uint64_t reinit_done() const { return reinit_done_.load(); }
+
 private:
     PlannerInference() = default;
 
@@ -82,6 +91,8 @@ private:
     // ── planning state ──────────────────────────────────────────
     int           gen_frame_{0};   // blend point of the plan being generated
     bool          initialized_{false};
+    std::atomic<uint64_t> reinit_requested_{0};
+    std::atomic<uint64_t> reinit_done_{0};
     double        default_height_{0.788740};
     int64_t       current_random_seed_{1234};   // gear_sonic initial_random_seed
     MovementState last_movement_state_{};

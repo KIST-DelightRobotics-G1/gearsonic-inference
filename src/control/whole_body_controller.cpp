@@ -8,8 +8,7 @@
 #include "teleop/teleop_tracker.hpp"
 #include "unitree/unitree_state_reader.hpp"
 
-#include "control/robot_ownership.hpp"
-#include "vla/vla_initial_pose.hpp"
+#include "control/control_arbiter.hpp"
 #include "vla/vla_token_receiver.hpp"
 
 #include <algorithm>
@@ -202,10 +201,20 @@ void WholeBodyController::tick_control() {
         return;
     }
 
-    // A live external token stream (kist-vla-inference) overrides the
-    // planner+encoder path entirely.
-    if (tick_vla_control(t0))
-        return;
+    // Arbitration: this tick's owner decides which path runs. kVla and
+    // kRecovering bypass the planner+encoder path entirely; kNormal and
+    // kTeleop share it (the encoder mode below keys off the vr3 buffer).
+    update_arbiter();
+    switch (ControlArbiter::instance().mode()) {
+        case ControlArbiter::Mode::kVla:
+            tick_vla(t0);
+            return;
+        case ControlArbiter::Mode::kRecovering:
+            tick_recovery(t0);
+            return;
+        default:
+            break;
+    }
 
     // Snapshot the playback state. The lock protects cursor_ against the
     // planner thread's playback_snapshot(); playback_motion_ itself is only
@@ -225,13 +234,27 @@ void WholeBodyController::tick_control() {
     }
 
     // Teleop upper-body target: buffer presence selects the encoder mode
-    // (empty until calibrated, cleared when body tracking drops -> g1).
+    // (empty until calibrated; through a body-stream dropout it holds the
+    // last target, so the arms freeze in place instead of snapping to g1).
     auto vr3 = TeleopTracker::instance().vr3point_buf.GetData();
+
+    // Teleop engage/disengage steps the encoder's upper-body reference
+    // (planner pose <-> operator pose) — slide the token across the step
+    // instead of letting the arms jump.
+    bool vr3_present = static_cast<bool>(vr3);
+    if (vr3_present != last_vr3_present_) {
+        last_vr3_present_ = vr3_present;
+        ControlArbiter::instance().arm_handoff();
+    }
 
     TokenEncoder::Token token;
     if (!encoder_.step(*motion, cursor, playing_, logger_, vr3.get(), token))
         return;
     auto t1 = clock::now();
+
+    // Through the arbiter stage: normally a pass-through, but fresh out of
+    // a recovery it crossfades from the standing hold (see select_token).
+    token = ControlArbiter::instance().select_token(&token, nullptr);
 
     MotorCommand cmd;
     if (!decoder_.step(token, logger_, cmd))
@@ -257,17 +280,6 @@ void WholeBodyController::loop() try {
 
     while (!stop_) {
         auto t0 = clock::now();
-
-        // First-come ownership: teleop claims the robot while calibrated
-        // and releases when calibration drops. (VLA claims/latches inside
-        // tick_vla_control; the e-stop below outranks both.)
-        {
-            auto& ownership = RobotOwnership::instance();
-            if (TeleopTracker::instance().calibrated())
-                ownership.try_claim(RobotOwnership::Owner::kTeleop);
-            else
-                ownership.release(RobotOwnership::Owner::kTeleop);
-        }
 
         // Operator e-stop: terminal state — damping every tick, no recovery.
         if (InputHandler::instance().estop()) {
@@ -309,66 +321,107 @@ void WholeBodyController::loop() try {
     std::cerr << "[WholeBodyController] loop exception: " << e.what() << "\n";
 }
 
-// ─── VLA external-token mode ──────────────────────────────────────────────────
+// ─── arbitration + VLA external-token mode ────────────────────────────────────
 
-bool WholeBodyController::tick_vla_control(std::chrono::steady_clock::time_point t0) {
-    using clock = std::chrono::steady_clock;
+// Single writer of the ControlArbiter stage: step the transition function
+// with this tick's inputs, then apply the EXTERNAL side effects of any
+// transition (everything touching another module — the stage itself only
+// arms its internal token blends).
+void WholeBodyController::update_arbiter() {
+    using Mode = ControlArbiter::Mode;
+    auto& arb = ControlArbiter::instance();
+
     auto vla = VlaTokenReceiver::instance().latent_buf.GetDataWithTime();
+    bool vla_fresh = vla.HasData() && vla.GetAgeMs() <= kVlaTokenFreshMs;
+    bool vla_alive = vla.HasData() && vla.GetAgeMs() <= kVlaTokenHoldMs;
+    bool recovery_done = reinit_ticket_issued_ &&
+                         PlannerInference::instance().reinit_done() >= reinit_ticket_;
 
-    if (!vla_active_) {
-        if (!vla.HasData() || vla.GetAgeMs() > kVlaTokenFreshMs)
-            return false;  // no live stream — planner path as usual
+    Mode cur  = arb.mode();
+    Mode next = arb.step_mode(vla_fresh, vla_alive,
+                              TeleopTracker::instance().calibrated(),
+                              recovery_done);
+    if (next == cur)
+        return;
 
-        // First-come ownership: if teleop already holds the robot, ignore
-        // the token stream entirely (logged once per process — the flag
-        // never resets).
-        if (!RobotOwnership::instance().try_claim(RobotOwnership::Owner::kVla)) {
-            if (!vla_denied_logged_) {
-                std::cout << "[WholeBodyController] VLA tokens arriving but teleop "
-                             "owns the robot — ignoring VLA until restart\n";
-                vla_denied_logged_ = true;
+    switch (next) {
+        case Mode::kVla:
+            // Insurance against the one-tick race where a calibration lands
+            // on the same tick the stream claims: no hidden armed teleop may
+            // survive into (or past) a VLA session.
+            TeleopTracker::instance().reset_calibration();
+            std::cout << "[WholeBodyController] -> VLA (external tokens; "
+                         "planner paused, B ignored)\n";
+            break;
+        case Mode::kTeleop:
+            std::cout << "[WholeBodyController] -> TELEOP (VLA tokens ignored "
+                         "until teleop disengages)\n";
+            break;
+        case Mode::kRecovering:
+            reinit_ticket_issued_ = false;
+            std::cerr << "[WholeBodyController] VLA token stream LOST (>"
+                      << kVlaTokenHoldMs << "ms stale) -> recovering: standing "
+                         "blend, then planner reseed back to the origin\n";
+            break;
+        case Mode::kNormal:
+            if (cur == Mode::kRecovering) {
+                // Fresh origin: never resume the pre-VLA playback timeline
+                // (it froze when VLA claimed) — adopt the reseeded planner
+                // motion as if this were the first one.
+                {
+                    std::lock_guard<std::mutex> lock(playback_mutex_);
+                    playback_motion_ = MotionSequence50Hz{};
+                    cursor_          = 0;
+                    playing_         = false;
+                    last_plan_stamp_ = {};
+                }
+                InputHandler::instance().disarm();
+                std::cout << "[WholeBodyController] -> ORIGIN (planner idle; "
+                             "B re-engages teleop, a fresh token re-claims VLA)\n";
+            } else {
+                std::cout << "[WholeBodyController] -> ORIGIN (teleop off)\n";
             }
-            return false;
-        }
-        std::cout << "[WholeBodyController] VLA token stream live -> external token mode\n";
-        vla_active_ = true;
+            break;
+    }
+}
+
+void WholeBodyController::tick_vla(std::chrono::steady_clock::time_point t0) {
+    // Liveness was checked by update_arbiter this same tick; the buffer is
+    // only ever overwritten (never cleared), so this read cannot fail in
+    // practice — the guard is pure paranoia.
+    auto vla = VlaTokenReceiver::instance().latent_buf.GetData();
+    if (!vla)
+        return;
+    // VlaLatentAction::token, ControlArbiter::Token and TokenEncoder::Token
+    // are all std::array<float, 64>.
+    decode_and_publish(
+        ControlArbiter::instance().select_token(nullptr, &vla->token), t0);
+}
+
+// Stream lost: the decoder and robot state are still healthy, so instead of
+// damping (a fall when not hung) the stage blends the last commanded token
+// to the verified safe standing token and keeps balancing there. Once the
+// blend lands, reseed the planner from the measured standing pose; the
+// arbiter returns to kNormal when the reseed is acknowledged.
+void WholeBodyController::tick_recovery(std::chrono::steady_clock::time_point t0) {
+    auto& arb = ControlArbiter::instance();
+    auto token = arb.select_token(nullptr, nullptr);  // standing blend/hold
+
+    if (arb.recovery_blend_done() && !reinit_ticket_issued_) {
+        reinit_ticket_        = PlannerInference::instance().request_reinit();
+        reinit_ticket_issued_ = true;
     }
 
-    // Stream-loss handling: losing the token stream ends the VLA session
-    // (latched — a resumed stream may not silently retake the robot, and
-    // the planner path's playback timeline froze at the pre-VLA state, so
-    // falling back there would yank the robot toward a stale reference).
-    // But the decoder and robot state are still healthy, so instead of
-    // damping (a fall when not hung) we blend the last commanded token to
-    // the verified safe standing token and keep balancing there: the robot
-    // ends up standing in place, waiting. E-stop still gives damping;
-    // restart is the only way back to control.
-    TokenEncoder::Token token;
-    if (!vla_stream_lost_ && (!vla.HasData() || vla.GetAgeMs() > kVlaTokenHoldMs)) {
-        std::cerr << "[WholeBodyController] VLA token stream LOST (>"
-                  << kVlaTokenHoldMs << "ms stale) — blending to safe "
-                     "standing hold (e-stop to stop, restart to recover)\n";
-        vla_stream_lost_ = true;
-        vla_loss_blend_tick_ = 0;
-    }
-    if (vla_stream_lost_) {
-        float alpha = 1.0f;
-        if (vla_loss_blend_tick_ < kVlaLossBlendTicks) {
-            alpha = static_cast<float>(++vla_loss_blend_tick_) / kVlaLossBlendTicks;
-        }
-        for (size_t i = 0; i < token.size(); ++i)
-            token[i] = (1.0f - alpha) * last_vla_token_[i]
-                       + alpha * kVlaSafeStandingToken[i];
-    } else {
-        // VlaLatentAction::token and TokenEncoder::Token are both
-        // std::array<float, 64>.
-        token = vla.data->token;
-        last_vla_token_ = token;
-    }
+    decode_and_publish(token, t0);
+}
+
+void WholeBodyController::decode_and_publish(const TokenEncoder::Token& token,
+                                             std::chrono::steady_clock::time_point t0) {
+    using clock = std::chrono::steady_clock;
 
     MotorCommand cmd;
     if (!decoder_.step(token, logger_, cmd))
-        return true;
+        return;
     motor_command_buf.SetData(cmd);
 
     {
@@ -378,7 +431,6 @@ bool WholeBodyController::tick_vla_control(std::chrono::steady_clock::time_point
             std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - t0).count();
         timing_.total = timing_.decoder;
     }
-    return true;
 }
 
 } // namespace kist

@@ -1,5 +1,6 @@
 #include "teleop/teleop_tracker.hpp"
 #include "common/math_utils.hpp"
+#include "control/control_arbiter.hpp"
 #include "pico/pico_vr_reader.hpp"
 #include "teleop/g1_arm_fk.hpp"
 
@@ -88,7 +89,8 @@ void TeleopTracker::loop() {
 
         auto body = PicoVRReader::instance().body_buf.GetDataWithTime();
         if (!body.HasData()) {
-            // body tracking absent/stale — no teleop target
+            // no body sample yet this session (the reader holds the last
+            // one through dropouts, so this only fires before the first)
             vr3point_buf.Clear();
         } else if (body.timestamp != last_body_time_) {
             last_body_time_ = body.timestamp;
@@ -110,6 +112,17 @@ void TeleopTracker::loop() {
 // InputHandler). Without this the e-stop windup would flip teleop at
 // exactly the wrong moment.
 void TeleopTracker::check_calibration_gesture() {
+    // While VLA holds the robot (or the origin recovery is running) B is
+    // ignored outright — no hidden armed teleop can form, so the VLA exit
+    // path always lands at the origin (see control_arbiter.hpp).
+    auto arb_mode = ControlArbiter::instance().mode();
+    if (arb_mode == ControlArbiter::Mode::kVla ||
+        arb_mode == ControlArbiter::Mode::kRecovering) {
+        calib_hold_ticks_      = 0;
+        calib_gesture_latched_ = false;
+        return;
+    }
+
     auto ctrl = PicoVRReader::instance().ctrl_buf.GetData();
     bool b_alone = ctrl && ctrl->btn_b &&
                    !ctrl->btn_a && !ctrl->btn_x && !ctrl->btn_y;

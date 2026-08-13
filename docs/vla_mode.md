@@ -15,20 +15,24 @@ the Docker image includes it). The Python side mirrors the types in
 
 ## Behavior
 
-First-come ownership (`include/control/robot_ownership.hpp`) arbitrates VLA
-vs teleop — whichever claims the robot first keeps it:
+First-come arbitration (`include/control/control_arbiter.hpp`) between VLA
+and teleop, with every exit routed through the origin (planner idle) —
+never a direct handover:
 
-- A token fresher than 200 ms claims for VLA and switches
+- From the origin, a token fresher than 200 ms claims for VLA and switches
   `WholeBodyController` into external-token mode (planner path bypassed).
   Its hand targets replace the VR trigger mapping, clamped to the SDK
-  joint limits.
-- If teleop calibrated first, VLA tokens are ignored until restart.
-- VLA ownership is sticky — a stream stale for 500 ms counts as LOST and
-  the controller blends (1 s) to a verified safe standing token and keeps
-  balancing there, hands holding their last targets; neither a resumed
-  stream nor the planner path (its playback timeline froze at the pre-VLA
-  state) may retake the robot — restart to recover.
-- The VR grip e-stop (A+B+X+Y held 1s) outranks everything, always:
+  joint limits. While VLA holds, the teleop B gesture is ignored.
+- If teleop holds the robot (calibrated), VLA tokens are ignored until the
+  operator disengages (B toggle) — then the origin re-arbitrates, so a
+  still-live stream takes over from there.
+- A stream stale for 500 ms is LOST and triggers the recovery sequence:
+  blend (1 s) to a verified safe standing token, hold balancing there
+  (hands keeping their last targets), reseed the planner from the measured
+  standing pose, then return to the origin — locomotion disarmed, hands on
+  their fallbacks. A resumed stream re-claims from the origin; no restart
+  is needed.
+- The VR e-stop (A+B+X+Y held 1s) outranks everything, always:
   damping, latched.
 
 The safe standing token (`include/vla/vla_initial_pose.hpp`) is specific to

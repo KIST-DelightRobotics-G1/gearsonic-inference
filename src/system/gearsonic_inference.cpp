@@ -53,7 +53,7 @@ bool GearsonicInference::start(const std::string& config_path) {
 
     // VLA latent-action Rx rides the DDS factory UnitreeStateReader just
     // initialized. Pure intake — nothing moves until tokens arrive AND the
-    // controller is in CONTROL (first-come ownership, robot_ownership.hpp).
+    // controller is in CONTROL (first-come arbitration, control_arbiter.hpp).
     if (!VlaTokenReceiver::instance().start()) {
         stop();
         return false;

@@ -1,4 +1,5 @@
 #include "motion/input_handler.hpp"
+#include "control/control_arbiter.hpp"
 #include "pico/pico_vr_reader.hpp"
 
 #include <algorithm>
@@ -156,9 +157,13 @@ void InputHandler::loop() {
                 final_speed = -1.0;
 
                 // ── nav arbitration: stick neutral -> a fresh external
-                //    command drives instead (momentary priority) ─────
+                //    command drives instead (momentary priority). Origin
+                //    mode only: during teleop the operator's stick is the
+                //    sole locomotion source, and during VLA/recovery the
+                //    planner output is unconsumed anyway ─────
                 auto nav = nav_buf.GetDataWithTime();
-                if (nav.HasData() && nav.GetAgeMs() < kNavStaleMs) {
+                if (ControlArbiter::instance().mode() == ControlArbiter::Mode::kNormal &&
+                    nav.HasData() && nav.GetAgeMs() < kNavStaleMs) {
                     double v = std::hypot(nav.data->vx, nav.data->vy);
                     final_height = -1.0;  // nav modes are non-crouch
 

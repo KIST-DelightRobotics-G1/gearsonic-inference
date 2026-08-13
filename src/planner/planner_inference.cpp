@@ -374,8 +374,19 @@ void PlannerInference::loop() try {
     while (!stop_) {
         auto t0 = clock::now();
 
+        // Reseed request (VLA -> origin recovery): drop the stale context
+        // and go back through initialize_once. The buffer is cleared first
+        // so consumers can treat any published motion as post-reseed.
+        uint64_t reinit_req = reinit_requested_.load();
+        if (reinit_req != reinit_done_.load() && initialized_) {
+            std::cout << "[PlannerInference] reseed requested — reinitializing\n";
+            motion_50hz_buf.Clear();
+            initialized_ = false;
+        }
+
         if (!initialized_) {
-            initialize_once();
+            if (initialize_once())
+                reinit_done_.store(reinit_req);
             std::this_thread::sleep_until(t0 + period);
             continue;
         }

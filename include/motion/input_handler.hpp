@@ -34,6 +34,11 @@ public:
     // should show this instead.
     int mode() const { return mode_index_; }
 
+    // Drop back to IDLE so walking requires an explicit re-selection —
+    // same semantics as the VR-link-loss safe stop. Called by the control
+    // loop when the origin is re-entered after a VLA session.
+    void disarm() { mode_index_ = 0; }
+
     // Emergency stop: latched once A+B+X+Y are all held for 1s.
     // One-way — never clears until the process restarts. Deliberately an
     // atomic and not a DataBuffer: a stop request must not be clearable
