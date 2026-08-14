@@ -139,7 +139,7 @@ set_target_properties(gearsonic_inference PROPERTIES CXX_STANDARD 20)
 # build/gearsonic_inference to match the repo name.
 add_executable(gearsonic src/main.cpp)
 target_link_libraries(gearsonic PRIVATE gearsonic_inference)
-set_target_properties(gearsonic PROPERTIES CXX_STANDARD 20 OUTPUT_NAME gearsonic_inference)
+set_target_properties(gearsonic PROPERTIES CXX_STANDARD 20 OUTPUT_NAME kist-gearsonic-inference)
 
 # ─── tests ────────────────────────────────────────────────────────────────────
 add_executable(test_pico_vr_reader test/test_pico_vr_reader.cpp)

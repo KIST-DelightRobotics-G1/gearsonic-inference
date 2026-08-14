@@ -76,7 +76,7 @@ private:
     // and drop back to IDLE whenever the VR link is lost (gear_sonic default).
     std::atomic<int> mode_index_{0};  // IDLE
 
-    HoldTrigger a_press_, x_press_, y_press_;
+    HoldTrigger a_press_, x_press_, y_press_, y_hold_;
     int    estop_hold_ticks_{0};
     std::atomic<bool> estop_{false};
 

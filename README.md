@@ -144,7 +144,7 @@ controller in reach (A+B+X+Y held 1s = emergency stop).
 source env.sh && run_vr_daemon
 
 # container: control (3s ramp to standing, then policy control)
-./build/gearsonic_inference
+./build/kist-gearsonic-inference
 ```
 
 Both modes run from the same binary; ownership is first-come:

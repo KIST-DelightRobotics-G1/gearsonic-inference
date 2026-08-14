@@ -186,9 +186,9 @@ void HandCommandWriter::loop() {
             left  = from_vla_joints(vla.data->left_hand,  /*is_left=*/true);
             right = from_vla_joints(vla.data->right_hand, /*is_left=*/false);
         } else if (hold_fist) {
-            // Before teleop calibration the trigger/grip axes still serve
-            // the locomotion UI (trigger+A/B height, extended mode list),
-            // so the hands hold a closed fist instead of tracking them.
+            // Before teleop calibration the operator isn't teleoperating
+            // the hands, so hold a closed fist (the safe carry posture)
+            // instead of tracking axes that are not deliberate input yet.
             left  = from_grip_and_trigger(1.0, 1.0, /*is_left=*/true);
             right = from_grip_and_trigger(1.0, 1.0, /*is_left=*/false);
         } else if (auto ctrl = PicoVRReader::instance().ctrl_buf.GetData()) {

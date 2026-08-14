@@ -10,7 +10,7 @@ With Docker, run this on the host, outside the container.
 
 ```bash
 source env.sh
-run_vr_daemon
+run_vr_daemon    # stop_vr_daemon to stop
 ```
 
 Connect the headset from its XRoboToolkit app.
@@ -20,7 +20,7 @@ Connect the headset from its XRoboToolkit app.
 **THE ROBOT MOVES on launch**: 3s ramp to standing, then policy control.
 
 ```bash
-./build/gearsonic_inference
+./build/kist-gearsonic-inference
 ```
 
 ## Controller
@@ -31,9 +31,9 @@ Connect the headset from its XRoboToolkit app.
 | Right stick | Rotate facing |
 | A | Return to IDLE |
 | Y | Mode up (IDLE / Slow Walk / Walk) |
-| Trigger + Y | Mode up (hard actions, e.g. Run) |
+| Y held 1s | Mode up into hard actions (e.g. Run) — one hold per step |
 | X | Mode down |
-| Trigger + B / A | Height up / down (crouch modes) |
+| Undefined | Height up / down (crouch modes) |
 | B held 1s | Teleop on / off (engage in the reference pose: forearms 90° forward, palms inward) |
 | Left / right grip (analog) | Left / right Dex3-1 thumb close (0 = open, 1 = pressed against fingers) |
 | Left / right trigger (analog) | Left / right Dex3-1 index+middle close (0 = open, 1 = cage / fist) |

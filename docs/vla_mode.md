@@ -44,7 +44,7 @@ ever changes.
 
 ```bash
 # gearsonic side (this repo) — same as teleop, VR still required as e-stop:
-./build/gearsonic_inference
+./build/kist-gearsonic-inference
 
 # VLA side (kist-vla-inference), with a UNITREE_G1_SONIC checkpoint:
 python scripts/run_vla.py --policy.model-path <ckpt> --io.action-transport dds
