@@ -7,7 +7,7 @@ Dex3 hand targets as `kist_msgs::LatentActionStep` on `rt/kist/latent_action`
 
 ## Contract
 
-`idl/kist_latent_action.idl` — shared with kist-vla-inference; built into
+`idl/kist_msgs.idl` — shared with kist-vla-inference; built into
 C++ types at build time by CycloneDDS `idlc` (0.10.2, matching the SDK's
 bundled ddscxx — a required dependency, see the README's Install CycloneDDS;
 the Docker image includes it). The Python side mirrors the types in
@@ -58,3 +58,8 @@ python scripts/publish_test_tokens.py --domain 0 --duration 15
 `./build/vla_receiver_probe [domain_id] [iface]` prints receive rate and the
 newest token — pair it with a kist-vla-inference publisher to verify the
 link without the robot.
+
+`./build/motion_token_probe [domain_id] [iface]` subscribes the outgoing
+decoder-token record stream (`rt/kist/motion_token`, for the data
+collector) — run it next to a live gearsonic to verify rate, seq
+continuity, and the mode tags.

@@ -8,6 +8,8 @@
 // constants: kist_vla/io/dds.py and gearsonic include/vla/vla_latent_action.hpp):
 //   "rt/kist/latent_action"  LatentActionStep, Reliable + KeepLast(1), 50 Hz
 //   "rt/kist/wbc_command"    WbcCommand,       Reliable + KeepLast(8)
+//   "rt/kist/motion_token"   MotionTokenState, KeepLast(1), 50 Hz
+//                            (gearsonic publisher -> data collector)
 //
 // Reader behavior (gearsonic side, whole_body_controller.cpp): staleness is
 // checked against the receive clock — a token fresher than 200 ms claims the
@@ -31,6 +33,21 @@ module kist_msgs {
         float              token_state[64];
         float              left_hand_joints[7];
         float              right_hand_joints[7];
+    };
+
+    // 50Hz record of the token the whole-body decoder actually consumed
+    // (the training-data ground truth — recomputing it offline is not
+    // possible: the encoder input is planner/teleop pipeline state, not
+    // robot state). seq increments only on ticks that decoded a token, so
+    // seq gaps mark non-CONTROL periods (INIT, damping, e-stop).
+    // arbiter_mode: 0 normal / 1 teleop / 2 vla / 3 recovering.
+    // encoder_mode: 0 g1 / 1 teleop / 255 = encoder skipped (vla, recovery).
+    struct MotionTokenState {
+        unsigned long long seq;
+        long long          stamp_ns;     // computation tick clock (epoch ns)
+        float              token_state[64];
+        octet              arbiter_mode;
+        octet              encoder_mode;
     };
 
     // Control-loop lifecycle command (mirrors the ZMQ "command" topic).

@@ -1,6 +1,7 @@
 #include "system/gearsonic_inference.hpp"
 
 #include "common/config.hpp"
+#include "collector/motion_token_publisher.hpp"
 #include "control/whole_body_controller.hpp"
 #include "motion/input_handler.hpp"
 #include "pico/pico_vr_reader.hpp"
@@ -9,7 +10,6 @@
 #include "unitree/hand_command_writer.hpp"
 #include "unitree/unitree_command_writer.hpp"
 #include "unitree/unitree_state_reader.hpp"
-
 #include "vla/vla_token_receiver.hpp"
 
 #include <chrono>
@@ -97,6 +97,15 @@ bool GearsonicInference::start(const std::string& config_path) {
     }
     hand_writer_started_ = true;
 
+    // Motion-token record stream (rt/kist/motion_token) for the data
+    // collector — pure observer of the decoder-input token; nothing in the
+    // control path waits on it.
+    if (!MotionTokenPublisher::instance().start(&control.motion_token_buf)) {
+        stop();
+        return false;
+    }
+    token_pub_started_ = true;
+
     if (!control.start(root["control"]["encoder_path"].as<std::string>(),
                        root["control"]["decoder_path"].as<std::string>(),
                        /*auto_start_control=*/true)) {
@@ -116,6 +125,10 @@ void GearsonicInference::stop() {
     if (control_started_) {
         WholeBodyController::instance().stop();
         control_started_ = false;
+    }
+    if (token_pub_started_) {
+        MotionTokenPublisher::instance().stop();
+        token_pub_started_ = false;
     }
     if (hand_writer_started_) {
         HandCommandWriter::instance().stop();

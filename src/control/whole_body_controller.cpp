@@ -262,6 +262,7 @@ void WholeBodyController::tick_control() {
     auto t2 = clock::now();
 
     motor_command_buf.SetData(cmd);
+    record_token(token, /*encoder_ran=*/true);
     advance_playback();
 
     {
@@ -423,6 +424,7 @@ void WholeBodyController::decode_and_publish(const TokenEncoder::Token& token,
     if (!decoder_.step(token, logger_, cmd))
         return;
     motor_command_buf.SetData(cmd);
+    record_token(token, /*encoder_ran=*/false);
 
     {
         std::lock_guard<std::mutex> l(timing_mutex_);
@@ -431,6 +433,23 @@ void WholeBodyController::decode_and_publish(const TokenEncoder::Token& token,
             std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - t0).count();
         timing_.total = timing_.decoder;
     }
+}
+
+// A copy of the consumed token for the recording stream. seq counts decoded
+// ticks only; stamp is the computation time (epoch) so the collector aligns
+// records to the tick, not to the publish moment.
+void WholeBodyController::record_token(const TokenEncoder::Token& token,
+                                       bool encoder_ran) {
+    MotionTokenSample s;
+    s.token    = token;
+    s.seq      = ++token_seq_;
+    s.stamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                     std::chrono::system_clock::now().time_since_epoch())
+                     .count();
+    s.arbiter_mode = static_cast<uint8_t>(ControlArbiter::instance().mode());
+    int em         = encoder_ran ? encoder_.mode() : -1;
+    s.encoder_mode = em < 0 ? uint8_t{255} : static_cast<uint8_t>(em);
+    motion_token_buf.SetData(s);
 }
 
 } // namespace kist

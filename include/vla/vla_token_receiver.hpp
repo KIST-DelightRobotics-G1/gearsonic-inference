@@ -8,8 +8,8 @@
 #include <atomic>
 #include <cstdint>
 
-// idl-generated (build/idl_gen, from idl/kist_latent_action.idl)
-#include "kist_latent_action.hpp"
+// idl-generated (build/idl_gen, from idl/kist_msgs.idl)
+#include "kist_msgs.hpp"
 
 namespace kist {
 

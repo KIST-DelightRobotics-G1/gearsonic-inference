@@ -87,7 +87,7 @@ sudo apt update && sudo apt install -y \
 
 CycloneDDS + CycloneDDS-CXX 0.10.2 into `/opt/cyclonedds`, pinned to match the
 SDK's bundled `libddscxx` (required — the VLA DDS types are generated from
-`idl/kist_latent_action.idl` at build time):
+`idl/kist_msgs.idl` at build time):
 
 ```bash
 git clone --depth 1 -b 0.10.2 https://github.com/eclipse-cyclonedds/cyclonedds.git /tmp/cyclonedds

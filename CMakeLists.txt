@@ -18,9 +18,10 @@ set_target_properties(pxrea PROPERTIES
 set(BUILD_EXAMPLES OFF CACHE BOOL "Build unitree_sdk2 examples" FORCE)
 add_subdirectory(thirdparty/unitree_sdk2)
 
-# ─── VLA DDS receiver ─────────────────────────────────────────────────────────
-# Latent-action types generated at build time from idl/kist_latent_action.idl
-# — the shared contract with kist-vla-inference. Requires the CycloneDDS
+# ─── kist_msgs DDS contract ───────────────────────────────────────────────────
+# All rt/kist/* wire types, generated at build time from idl/kist_msgs.idl
+# — the shared contract with kist-vla-inference (latent action in) and
+# kist-data-collector (motion token out). Requires the CycloneDDS
 # idlc toolchain (0.10.2, matching the SDK's bundled ddscxx), same as
 # kist-ext-sensor-io; the Docker image installs it under /opt/cyclonedds.
 find_program(CYCLONE_IDLC idlc HINTS /opt/cyclonedds/bin $ENV{CYCLONEDDS_HOME}/bin)
@@ -32,19 +33,23 @@ endif()
 set(KIST_IDL_GEN ${CMAKE_BINARY_DIR}/idl_gen)
 file(MAKE_DIRECTORY ${KIST_IDL_GEN})
 add_custom_command(
-    OUTPUT ${KIST_IDL_GEN}/kist_latent_action.hpp ${KIST_IDL_GEN}/kist_latent_action.cpp
+    OUTPUT ${KIST_IDL_GEN}/kist_msgs.hpp ${KIST_IDL_GEN}/kist_msgs.cpp
     COMMAND ${CYCLONE_IDLC} -l cxx
-            ${CMAKE_CURRENT_SOURCE_DIR}/idl/kist_latent_action.idl
+            ${CMAKE_CURRENT_SOURCE_DIR}/idl/kist_msgs.idl
     WORKING_DIRECTORY ${KIST_IDL_GEN}
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/idl/kist_latent_action.idl
-    COMMENT "idlc: kist_latent_action.idl -> C++ DDS types")
-add_library(kist_idl STATIC ${KIST_IDL_GEN}/kist_latent_action.cpp)
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/idl/kist_msgs.idl
+    COMMENT "idlc: kist_msgs.idl -> C++ DDS types")
+add_library(kist_idl STATIC ${KIST_IDL_GEN}/kist_msgs.cpp)
 target_include_directories(kist_idl PUBLIC ${KIST_IDL_GEN})
 target_link_libraries(kist_idl PUBLIC unitree_sdk2)  # bundled ddscxx
 
 add_library(vla_token_receiver STATIC src/vla/vla_token_receiver.cpp)
 target_include_directories(vla_token_receiver PUBLIC include)
 target_link_libraries(vla_token_receiver PUBLIC kist_idl unitree_sdk2)
+
+add_library(motion_token_publisher STATIC src/collector/motion_token_publisher.cpp)
+target_include_directories(motion_token_publisher PUBLIC include)
+target_link_libraries(motion_token_publisher PUBLIC kist_idl unitree_sdk2)
 
 # ─── pico_vr_reader ───────────────────────────────────────────────────────────
 add_library(pico_vr_reader STATIC
@@ -130,13 +135,13 @@ add_library(gearsonic_inference STATIC
     src/system/gearsonic_inference.cpp
 )
 target_include_directories(gearsonic_inference PUBLIC include)
-target_link_libraries(gearsonic_inference PUBLIC control unitree_command_writer hand_command_writer yaml-cpp)
+target_link_libraries(gearsonic_inference PUBLIC control unitree_command_writer hand_command_writer motion_token_publisher yaml-cpp)
 set_target_properties(gearsonic_inference PROPERTIES CXX_STANDARD 20)
 
 # ─── main ─────────────────────────────────────────────────────────────────────
 # Target stays `gearsonic` (the library target owns the gearsonic_inference
 # name — it is the embedders' link API); OUTPUT_NAME makes the binary itself
-# build/gearsonic_inference to match the repo name.
+# build/kist-gearsonic-inference to match the repo name.
 add_executable(gearsonic src/main.cpp)
 target_link_libraries(gearsonic PRIVATE gearsonic_inference)
 set_target_properties(gearsonic PROPERTIES CXX_STANDARD 20 OUTPUT_NAME kist-gearsonic-inference)
@@ -178,6 +183,9 @@ target_include_directories(test_arbiter_probe PRIVATE include)
 
 add_executable(vla_receiver_probe test/vla_receiver_probe.cpp)
 target_link_libraries(vla_receiver_probe PRIVATE vla_token_receiver)
+
+add_executable(motion_token_probe test/motion_token_probe.cpp)
+target_link_libraries(motion_token_probe PRIVATE motion_token_publisher)
 
 add_executable(test_teleop_live test/test_teleop_live.cpp)
 target_link_libraries(test_teleop_live PRIVATE teleop_tracker)

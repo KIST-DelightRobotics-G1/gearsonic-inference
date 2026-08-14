@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/data_buffer.hpp"
+#include "control/motion_token.hpp"
 #include "control/motor_command.hpp"
 #include "control/policy_decoder.hpp"
 #include "control/state_logger.hpp"
@@ -46,6 +47,11 @@ public:
     // ── outputs ─────────────────────────────────────────────────
     DataBuffer<MotorCommand> motor_command_buf;
 
+    // Recording tap: a copy of every token the decoder consumed, for the
+    // MotionTokenPublisher (pure observer — the control path only does a
+    // SetData here, exactly like motor_command_buf above).
+    DataBuffer<MotionTokenSample> motion_token_buf;
+
     // Playback snapshot for the planner's context (blended motion + cursor).
     // Returns false until the first planner motion has been adopted.
     bool playback_snapshot(MotionSequence50Hz& motion, int& cursor) const;
@@ -79,6 +85,11 @@ private:
     void tick_recovery(std::chrono::steady_clock::time_point t0);
     void decode_and_publish(const TokenEncoder::Token& token,
                             std::chrono::steady_clock::time_point t0);
+
+    // Drop a copy of the consumed token into motion_token_buf (called
+    // after the tick's MotorCommand is published, never before).
+    void record_token(const TokenEncoder::Token& token, bool encoder_ran);
+    uint64_t token_seq_{0};
 
     bool     reinit_ticket_issued_{false};    // planner reseed asked this recovery
     uint64_t reinit_ticket_{0};               // planner ack target
