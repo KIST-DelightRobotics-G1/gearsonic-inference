@@ -15,10 +15,13 @@ namespace kist {
 
 // DDS Rx for the VLA latent-action stream (kist-vla-inference -> here).
 //
-// Pure data intake, mirroring UnitreeStateReader's shape: the token stream
-// is state ("newest wins") and lands in a latest-wins DataBuffer.
-// Operational meaning (mode switching, staleness policy, safety) lives in
-// the consumers — WholeBodyController and HandCommandWriter.
+// Data intake mirroring UnitreeStateReader's shape: the token stream is
+// state ("newest wins") and lands in a latest-wins DataBuffer. The receiver
+// validates each sample itself — any non-finite float (token or hand
+// joints) drops the whole sample before it reaches the buffer, so
+// consumers never see NaN/Inf. Operational meaning (mode switching,
+// staleness policy, safety) still lives in the consumers —
+// WholeBodyController and HandCommandWriter.
 //
 // Requires the unitree ChannelFactory to be initialized first
 // (UnitreeStateReader::start does that).
@@ -33,6 +36,9 @@ public:
     // Messages received so far (monotonic; produce-side truth for rate probes)
     uint64_t latent_received() const { return latent_received_.load(); }
 
+    // Samples dropped by validation (non-finite values)
+    uint64_t latent_rejected() const { return latent_rejected_.load(); }
+
 private:
     VlaTokenReceiver() = default;
 
@@ -43,6 +49,7 @@ private:
     unitree::robot::ChannelSubscriberPtr<kist_msgs::LatentActionStep> latent_sub_;
 
     std::atomic<uint64_t> latent_received_{0};
+    std::atomic<uint64_t> latent_rejected_{0};
 };
 
 } // namespace kist

@@ -11,20 +11,21 @@ namespace kist {
 
 // Mode navigation walks the LocomotionMode values linearly (gear_sonic
 // remote scheme, clamped at both ends). Going up past WALK — RUN and the
-// advanced modes (squat, crawl, boxing, ...) — requires holding a trigger;
-// going down (toward IDLE — always the safer direction) is never gated.
+// advanced modes (squat, crawl, boxing, ...) — requires holding Y for a
+// full second (one deliberate hold per hard step; the trigger stays free
+// for the Dex3 fingers); going down (toward IDLE — always the safer
+// direction) is never gated.
 static constexpr int    kBasicModeMax = static_cast<int>(LocomotionMode::WALK);         // 2
 static constexpr int    kFullModeMax  = static_cast<int>(LocomotionMode::INJURED_WALK); // 19 (gear_sonic cap)
 static constexpr double kTriggerHeld  = 0.5;
 // Body height is meaningful only in the crouch modes (squat/kneel, 4..6);
 // standing modes force -1 (mode default), matching the gear_sonic gamepad.
-// Adjusted by trigger+B (up) / trigger+A (down) while crouched.
+// The live adjust input is currently UNBOUND — trigger+A/B was retired so
+// the triggers stay exclusively on the Dex3 fingers — so crouch height
+// holds at the seed value.
 static constexpr int    kCrouchFirst  = static_cast<int>(LocomotionMode::IDEL_SQUAT); // 4
 static constexpr int    kCrouchLast   = static_cast<int>(LocomotionMode::IDEL_KNEEL); // 6
 static constexpr double kHeightSeed   = 0.8;   // on entering a crouch mode (gear_sonic)
-static constexpr double kHeightMin    = 0.1;   // gear_sonic clamp
-static constexpr double kHeightMax    = 0.8;
-static constexpr double kHeightRate   = 0.3;   // m/s while held
 // E-stop gesture: all four face buttons held for a full second. Buttons
 // (not the grip axes) so hand control — grip=thumb, trigger=index+middle
 // — stays orthogonal; four-buttons+hold rules out reflex/accident.
@@ -36,6 +37,7 @@ static constexpr double kHeightRate   = 0.3;   // m/s while held
 // single-button actions until the buttons release.
 static constexpr int kEstopHoldTicks   = 500;  // 1s at 500Hz
 static constexpr int kSingleHoldTicks  = 15;   // 30ms at 500Hz — combo grace
+static constexpr int kHardHoldTicks    = 500;  // 1s at 500Hz — hard-mode gate
 static constexpr double kDeadZone   = 0.15;   // gear_sonic JOYSTICK_DEADZONE
 static constexpr double kFacingRate = 1.5;    // rad/s at full stick (gear_sonic yaw_gain)
 static constexpr double kLoopDt     = 0.002;  // 500Hz
@@ -107,33 +109,35 @@ void InputHandler::loop() {
             // concurrent face button in that window resets the counter,
             // voiding the gesture. Combos never trigger single-button
             // effects.
+            // trigger+A stays deliberately unbound: gripping (trigger
+            // held) must never fire the IDLE escape by accident.
             bool a_alone = ctrl->btn_a && !combo && !trigger_held;
             bool y_alone = ctrl->btn_y && !combo;
             bool x_alone = ctrl->btn_x && !combo;
 
             if (a_press_.tick(a_alone, kSingleHoldTicks))
                 mode_index_ = static_cast<int>(LocomotionMode::IDLE);  // escape from anywhere
+            // Y tap steps up within the basic range; the hard actions
+            // (RUN, squat, ...) each gate behind a deliberate 1s hold of
+            // the same button — one hold, one step, release to re-arm.
             if (y_press_.tick(y_alone, kSingleHoldTicks)) {
-                int limit = trigger_held ? kFullModeMax : kBasicModeMax;
-                if (mode_index_ < limit)
+                if (mode_index_ < kBasicModeMax)
+                    ++mode_index_;
+            }
+            if (y_hold_.tick(y_alone, kHardHoldTicks)) {
+                if (mode_index_ < kFullModeMax)
                     ++mode_index_;
             }
             if (x_press_.tick(x_alone, kSingleHoldTicks) && mode_index_ > 0)
                 --mode_index_;
 
             // ── body height (crouch modes only) ──────────────────
+            // Fixed at the seed while crouched; the adjust input is
+            // unbound (trigger+A/B retired — see the constants above).
             bool crouched = mode_index_ >= kCrouchFirst && mode_index_ <= kCrouchLast;
             if (crouched) {
                 if (height_ < 0.0)
                     height_ = kHeightSeed;  // just entered the crouch band
-                // Height rides trigger+B (up) / trigger+A (down). Gate
-                // by !combo so an incoming e-stop doesn't jog height on
-                // its way in.
-                if (trigger_held && !combo) {
-                    if (ctrl->btn_b) height_ += kHeightRate * kLoopDt;  // B = up
-                    if (ctrl->btn_a) height_ -= kHeightRate * kLoopDt;
-                    height_ = std::clamp(height_, kHeightMin, kHeightMax);
-                }
             } else {
                 height_ = -1.0;
             }

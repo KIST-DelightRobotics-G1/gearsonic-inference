@@ -101,11 +101,10 @@ void TeleopTracker::loop() {
     }
 }
 
-// B held 1s (triggers released — trigger+B is the height control, and a
-// pressed trigger also means the operator is closing the fingers) — a
-// toggle: not calibrated -> calibrate (teleop on); calibrated ->
-// reset (back to g1). Must be released before it can fire again;
-// re-entry recalibrates fresh.
+// B held 1s (triggers released — a pressed trigger means the operator is
+// closing the Dex3 fingers, not gesturing) — a toggle: not calibrated ->
+// calibrate (teleop on); calibrated -> reset (back to g1). Must be
+// released before it can fire again; re-entry recalibrates fresh.
 //
 // Also gated by "B alone among the face buttons": A+B+X+Y is the e-stop
 // combo, and any 2-button hold voids per-button gestures (see
