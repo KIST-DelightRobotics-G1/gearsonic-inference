@@ -7,7 +7,7 @@ namespace kist {
 
 // DDS topic shared with kist-vla-inference — must match the constants in
 // its kist_vla/io/dds.py. Named in the rt/kist/* convention used by
-// kist-ext-sensor-io. (Wire types: idl/kist_latent_action.idl. The
+// kist-ext-sensor-io. (Wire types: idl/kist_msgs.idl. The
 // rt/kist/wbc_command topic defined there is RESERVED for the future
 // Orchestrator's lifecycle commands — no subscriber here yet; session
 // lifecycle currently rides the data plane: auto-start, stop-publishing ->

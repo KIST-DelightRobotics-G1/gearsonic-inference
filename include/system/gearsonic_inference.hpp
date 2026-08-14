@@ -13,7 +13,8 @@ namespace kist {
 //     -> PicoVRReader -> InputHandler -> TeleopTracker
 //        -> UnitreeStateReader (waits for robot state) -> VlaTokenReceiver
 //        -> PlannerInference (+ playback provider wiring)
-//        -> UnitreeCommandWriter -> HandCommandWriter -> WholeBodyController
+//        -> UnitreeCommandWriter -> HandCommandWriter
+//        -> MotionTokenPublisher -> WholeBodyController
 //        -> 3s INIT ramp -> policy control, no further calls needed.
 //
 // *** Calling start() means the robot WILL MOVE. *** Gating (operator
@@ -61,6 +62,7 @@ private:
     bool planner_started_{false};
     bool writer_started_{false};
     bool hand_writer_started_{false};
+    bool token_pub_started_{false};
     bool control_started_{false};
 
     std::atomic<bool> quit_{false};
