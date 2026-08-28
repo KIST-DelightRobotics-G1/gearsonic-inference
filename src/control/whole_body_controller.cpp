@@ -18,6 +18,27 @@ namespace kist {
 
 static constexpr double kMaxJointVel  = 35.0;   // rad/s, safety abort
 static constexpr double kStateStaleMs = 500.0;  // LowState absence threshold
+// LowState-loss policy — NEVER damping (damping crumpled the robot on any
+// 60ms blip once the reader watchdog cleared the buffer; the PC must not
+// let go of the robot on a hiccup). Damping stays only on the e-stop path.
+//   grace          : publish nothing — the 500Hz writer repeats the last
+//                    command, so a transient blip doesn't disturb the robot
+//   beyond the grace: ramp the last commanded target to the BASE standing
+//                    pose (g1_default_angles + policy gains) and hold it —
+//                    stale walking targets are never asserted for long
+//   recovery       : after a long loss discard the frozen playback timeline
+//                    and reseed the planner from the measured pose (origin
+//                    re-entry, same philosophy as the VLA recovery)
+// This base-hold reaches the robot only on a PARTIAL/soft loss (state gone,
+// commands still delivered). On a FULL disconnect nothing arrives, and the
+// base pose is open-loop anyway — it cannot balance a real robot for more
+// than ~1s (hardware-confirmed: it falls). Keeping it standing through a
+// full loss is the ONBOARD watchdog's job (kist-g1-safety-controller hands
+// the robot to the built-in balance controller, whose sensors are local).
+// This gate's contract is narrower: never damp, and never assert a stale
+// walking target — so whatever the robot receives last is a safe pose.
+static constexpr int    kStateGraceTicks = 25;  // 0.5s at 50Hz
+static constexpr int    kBaseRampTicks   = 50;  // 1s ramp to the base pose
 
 WholeBodyController& WholeBodyController::instance() {
     static WholeBodyController inst;
@@ -63,14 +84,28 @@ bool WholeBodyController::playback_snapshot(MotionSequence50Hz& motion, int& cur
 
 bool WholeBodyController::check_safety() {
     auto st = UnitreeStateReader::instance().unitree_state_buf.GetDataWithTime();
-    if (!st.HasData() || st.GetAgeMs() > kStateStaleMs) {
-        std::cerr << "[WholeBodyController] LowState missing/stale — stopping\n";
-        return false;
-    }
-    return true;
+    return st.HasData() && st.GetAgeMs() <= kStateStaleMs;
 }
 
-// On any safety failure, overwrite the outgoing command with zero-torque
+// LowState-loss hold: ramp the last commanded target to the base standing
+// pose (mirrors tick_init, but interpolates from the last COMMAND — there
+// is no measured pose while the state is missing), then keep publishing
+// the base pose until the state returns.
+void WholeBodyController::publish_base_hold() {
+    int t = state_missing_ticks_ - kStateGraceTicks;
+    double ratio = std::clamp(double(t) / kBaseRampTicks, 0.0, 1.0);
+    MotorCommand cmd;
+    for (int i = 0; i < 29; ++i) {
+        cmd.q_target[i] = static_cast<float>(
+            base_ramp_from_.q_target[i] * (1.0 - ratio) +
+            g1_default_angles[i] * ratio);
+        cmd.kp[i] = g1_kps[i];
+        cmd.kd[i] = g1_kds[i];
+    }
+    motor_command_buf.SetData(cmd);
+}
+
+// On e-stop (and shutdown), overwrite the outgoing command with zero-torque
 // damping so the (running) writer never keeps publishing a stale target.
 void WholeBodyController::publish_damping() {
     MotorCommand damping;
@@ -195,10 +230,19 @@ void WholeBodyController::tick_control() {
     using clock = std::chrono::steady_clock;
     auto t0 = clock::now();
 
-    if (!gather_robot_state()) {
-        publish_damping();
-        state_ = State::WAIT_FOR_CONTROL;
+    // Buffer cleared between the loop's grace gate and here (watchdog race
+    // within the tick): skip silently — the writer repeats the last command
+    // and next tick's gate owns the loss policy.
+    if (!gather_robot_state())
         return;
+
+    // Waiting out a post-loss planner reseed: keep holding the base pose
+    // (the writer repeats it) until any motion left in the buffer is
+    // guaranteed post-reseed — never adopt a pre-loss plan.
+    if (state_reseed_ticket_ != 0) {
+        if (PlannerInference::instance().reinit_done() < state_reseed_ticket_)
+            return;
+        state_reseed_ticket_ = 0;
     }
 
     // Arbitration: this tick's owner decides which path runs. kVla and
@@ -293,10 +337,49 @@ void WholeBodyController::loop() try {
             continue;
         }
 
+        // LowState loss: hold the last command through the grace window,
+        // then ramp to the base standing pose and hold it. Auto-recovers
+        // when the state returns (see the policy note at the constants).
         if (!check_safety()) {
-            publish_damping();
+            ++state_missing_ticks_;
+            if (state_missing_ticks_ == 1)
+                std::cerr << "[WholeBodyController] LowState missing — holding "
+                             "last command (grace "
+                          << kStateGraceTicks * kControlDt << "s)\n";
+            if (state_missing_ticks_ > kStateGraceTicks) {
+                if (state_missing_ticks_ == kStateGraceTicks + 1) {
+                    std::cerr << "[WholeBodyController] LowState still missing — "
+                                 "grace expired, ramping to the base standing pose\n";
+                    if (auto last = motor_command_buf.GetData())
+                        base_ramp_from_ = *last;
+                }
+                publish_base_hold();
+            }
             std::this_thread::sleep_until(t0 + period);
             continue;
+        }
+        if (state_missing_ticks_ > 0) {
+            std::cerr << "[WholeBodyController] LowState recovered after "
+                      << state_missing_ticks_ * kControlDt << "s\n";
+            if (state_missing_ticks_ > kStateGraceTicks &&
+                state_ == State::CONTROL) {
+                // Long loss: origin re-entry — the frozen timeline must not
+                // resume (the robot walked itself to the base pose
+                // meanwhile). tick_control holds the base pose until the
+                // reseeded planner motion is the only thing adoptable.
+                {
+                    std::lock_guard<std::mutex> lock(playback_mutex_);
+                    playback_motion_ = MotionSequence50Hz{};
+                    cursor_          = 0;
+                    playing_         = false;
+                    last_plan_stamp_ = {};
+                }
+                InputHandler::instance().disarm();
+                state_reseed_ticket_ = PlannerInference::instance().request_reinit();
+                std::cerr << "[WholeBodyController] -> ORIGIN (planner reseed "
+                             "after LowState loss)\n";
+            }
+            state_missing_ticks_ = 0;
         }
 
         switch (state_) {
