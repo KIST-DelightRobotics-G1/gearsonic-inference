@@ -32,12 +32,23 @@ All following steps run from the repository root.
 
 #### 2. Install XRoboToolkit (host-side)
 
-The VR daemon talks to the headset over USB and runs on the host; the
-container reaches it via `--network host`.
+The VR daemon talks to the headset and runs on the host; the container
+reaches it via `--network host`. Pick the package for the host arch:
+
+**x86_64 workstation:**
 
 ```bash
 wget https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases/download/v1.0.0/XRoboToolkit_PC_Service_1.0.0_ubuntu_22.04_amd64.deb
 sudo dpkg -i XRoboToolkit_PC_Service_1.0.0_ubuntu_22.04_amd64.deb
+```
+
+**aarch64 onboard (Jetson / Orin)** — use the headless build (no display
+on the robot):
+
+```bash
+wget https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases/download/v1.0.0/XRoboToolkit-PC-Service-headless_1.0.0.0_arm64.deb
+sudo dpkg -i XRoboToolkit-PC-Service-headless_1.0.0.0_arm64.deb
+sudo apt-get install -f   # pull any missing deps
 ```
 
 #### Quick Start with Docker
