@@ -42,14 +42,17 @@ wget https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases/download/v1
 sudo dpkg -i XRoboToolkit_PC_Service_1.0.0_ubuntu_22.04_amd64.deb
 ```
 
-**aarch64 onboard (Jetson / Orin)** — use the headless build (no display
-on the robot):
+**aarch64 onboard (Jetson / Orin):** nothing to install on the host — the
+arm64 daemon is built for Ubuntu 22.04 (GLIBC 2.34 + Qt6) and won't run on
+the 20.04 Orin, so `Dockerfile.aarch64` bakes the headless daemon INTO the
+image. Start it from inside the container (`./docker/run.sh`):
 
 ```bash
-wget https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases/download/v1.0.0/XRoboToolkit-PC-Service-headless_1.0.0.0_arm64.deb
-sudo dpkg -i XRoboToolkit-PC-Service-headless_1.0.0.0_arm64.deb
-sudo apt-get install -f   # pull any missing deps
+source env.sh && run_vr_daemon      # daemon on :60061, in-container
 ```
+
+The bare-metal install below (`sudo dpkg -i …arm64.deb`) only works if the
+host is itself 22.04.
 
 #### Quick Start with Docker
 

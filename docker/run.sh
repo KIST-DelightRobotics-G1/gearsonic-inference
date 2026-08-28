@@ -12,6 +12,14 @@
 #   --network host       unitree DDS + VLA DDS + the host-side VR daemon
 #   --cap-add=SYS_NICE   RT thread priorities for the control loops
 #
+# VR daemon:
+#   x86     — runs on the HOST (see README); the container reaches it via
+#             --network host.
+#   aarch64 — baked INTO this image (the arm64 .deb needs Ubuntu 22.04, which
+#             the host Orin is not). Start it from inside the container:
+#                 source env.sh && run_vr_daemon
+#             then run gearsonic in the same (or another) shell.
+#
 # Iterative dev: add  -v "$(pwd)":/workspace/kist-gearsonic-inference  to
 # shadow the baked source with your working copy — then re-run the manual
 # thirdparty/model setup from the README (the bind mount hides the baked
