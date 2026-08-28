@@ -12,11 +12,11 @@
 # downloaded, source baked in. VR daemon still runs host-side (here, the
 # onboard host) over --network host.
 #
-# Base: same tag as the x86 Dockerfile — it resolves and builds on the Orin
-# (a prior build reached the source step on arm64), so only the PXREA step
-# below needed changing for aarch64. If NVIDIA splits a Jetson-only tag in,
-# change it here.
-FROM nvcr.io/nvidia/tensorrt:24.12-py3
+# Base: the -igpu (integrated GPU) TensorRT variant — the plain -py3 tag
+# resolves on arm64 but its TRT cannot build engines for the Orin's GPU
+# (SM 87), failing with "Target GPU SM 87 is not supported". -igpu is
+# NVIDIA's Jetson build and supports SM 87.
+FROM nvcr.io/nvidia/tensorrt:24.12-py3-igpu
 
 ENV DEBIAN_FRONTEND=noninteractive
 
