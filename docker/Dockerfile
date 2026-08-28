@@ -58,14 +58,19 @@ WORKDIR /workspace/kist-gearsonic-inference
 # XRoboToolkit-PC-Service pinned; only the client library + headers are kept
 # under thirdparty/pxrea (mirroring the manual README steps). The VR daemon
 # itself runs on the HOST — this is just the client .so gearsonic links.
+# x86_64 uses upstream's build.sh (its vendored grpc bundle is complete);
+# aarch64's bundle ships empty, so build_pxrea.sh regenerates the gRPC stubs
+# and links apt's grpc++/protobuf (installed below). See docker/build_pxrea.sh.
 ARG XROBO_COMMIT=85bac4dbc1fd5cef42c74a160d9c30aa3491f122
-RUN git clone https://github.com/XR-Robotics/XRoboToolkit-PC-Service.git /tmp/xrobo && \
+COPY docker/build_pxrea.sh /tmp/build_pxrea.sh
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends \
+            protobuf-compiler protobuf-compiler-grpc libgrpc++-dev libprotobuf-dev \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi && \
+    git clone https://github.com/XR-Robotics/XRoboToolkit-PC-Service.git /tmp/xrobo && \
     git -C /tmp/xrobo checkout "${XROBO_COMMIT}" && \
-    bash /tmp/xrobo/RoboticsService/PXREARobotSDK/build.sh && \
-    mkdir -p thirdparty/pxrea/include thirdparty/pxrea/lib && \
-    cp /tmp/xrobo/RoboticsService/PXREARobotSDK/PXREARobotSDK.h thirdparty/pxrea/include/ && \
-    cp -r /tmp/xrobo/RoboticsService/PXREARobotSDK/nlohmann thirdparty/pxrea/include/nlohmann && \
-    cp /tmp/xrobo/RoboticsService/PXREARobotSDK/build/libPXREARobotSDK.so thirdparty/pxrea/lib/ && \
+    bash /tmp/build_pxrea.sh /tmp/xrobo/RoboticsService/PXREARobotSDK "$(pwd)" && \
     rm -rf /tmp/xrobo
 
 # ─── vendored dep: unitree_sdk2 (cloned + pinned) ─────────────────────────────
