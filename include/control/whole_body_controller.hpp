@@ -109,6 +109,14 @@ private:
     // INIT ramp
     int init_ticks_{0};
 
+    // LowState-loss policy state (see the constants note in the .cpp):
+    // consecutive missing ticks, the ramp-start command captured when the
+    // grace expires, and the planner-reseed ticket for the origin re-entry.
+    int          state_missing_ticks_{0};
+    MotorCommand base_ramp_from_{};
+    uint64_t     state_reseed_ticket_{0};
+    void publish_base_hold();
+
     std::atomic<State> state_{State::INIT};
     std::atomic<bool>  operator_start_{false};
     bool               auto_start_{false};
