@@ -49,6 +49,11 @@ The image bakes in everything below (SDKs, toolchain, models, and the build):
 ./docker/run.sh        # shell in the container; prebuilt binaries under build/
 ```
 
+`build.sh` auto-selects the Dockerfile by architecture: `docker/Dockerfile`
+on x86_64 (workstation), `docker/Dockerfile.aarch64` on the Jetson / onboard
+Orin (running gearsonic onboard removes the PC↔robot link entirely). Same
+image tag, so `run.sh` is identical on both.
+
 `run.sh` wires `--gpus all` (TensorRT), `--network host` (unitree/VLA DDS +
 the VR daemon), and `--cap-add=SYS_NICE` (RT thread priorities). The numbered
 steps below (3–8) are the manual (non-Docker) alternative — steps 1–2

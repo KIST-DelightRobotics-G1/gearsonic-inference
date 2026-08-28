@@ -1,16 +1,21 @@
-# x86_64 workstation container — the complete gearsonic build+run environment.
-# TensorRT 10.7 + CUDA 12.6 to match the Jetson (JetPack 6 / TRT 10.7) target.
+# Jetson (aarch64) container — gearsonic ON the robot's onboard Orin, so the
+# whole controller runs onboard and the PC<->robot link (the fall-risk path)
+# disappears. Mirrors docker/Dockerfile (x86 workstation) but for JetPack 6 /
+# L4T: the base is NVIDIA's Jetson TensorRT image (arm64, TRT 10.x/CUDA 12),
+# and PXREA is built via docker/build_pxrea.sh because XRoboToolkit ships an
+# empty aarch64 grpc bundle (see that script).
 #
-# Self-contained (same pattern as kist-ext-sensor-io): dependencies are
-# cloned (pinned) and built INSIDE the image, models are downloaded, the repo
-# source is baked in via COPY, and the binaries are built at image-build
-# time — `docker run` gives ready binaries; no host-side vendoring, no bind
-# mount, no in-container setup. The ONLY host-side piece is the XRoboToolkit
-# PC service (the VR daemon: USB device + host service, see README); the
-# container reaches it over --network host.
+# Build/run ON the Orin (arm64) — this image does not build on x86.
+#   docker/build_aarch64.sh   then   docker/run.sh
 #
-# For iterative dev you can still shadow the baked source with a bind mount
-# (see run.sh comments).
+# Self-contained like the x86 image: deps cloned/built in-image, models
+# downloaded, source baked in. VR daemon still runs host-side (here, the
+# onboard host) over --network host.
+#
+# Base: same tag as the x86 Dockerfile — it resolves and builds on the Orin
+# (a prior build reached the source step on arm64), so only the PXREA step
+# below needed changing for aarch64. If NVIDIA splits a Jetson-only tag in,
+# change it here.
 FROM nvcr.io/nvidia/tensorrt:24.12-py3
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -55,17 +60,18 @@ ENV CYCLONEDDS_HOME=/opt/cyclonedds
 WORKDIR /workspace/kist-gearsonic-inference
 
 # ─── vendored dep: PXREA VR client SDK (cloned + built + staged) ──────────────
-# XRoboToolkit-PC-Service pinned; only the client library + headers are kept
-# under thirdparty/pxrea (mirroring the manual README steps). The VR daemon
-# itself runs on the HOST — this is just the client .so gearsonic links.
+# XRoboToolkit-PC-Service pinned. Its aarch64 grpc bundle ships EMPTY, so
+# build_pxrea.sh regenerates the gRPC stubs from the .proto and links apt's
+# grpc++/protobuf (installed here) — see that script. The client .so + headers
+# land under thirdparty/pxrea; the VR daemon itself runs host-side.
 ARG XROBO_COMMIT=85bac4dbc1fd5cef42c74a160d9c30aa3491f122
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        protobuf-compiler protobuf-compiler-grpc libgrpc++-dev libprotobuf-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY docker/build_pxrea.sh /tmp/build_pxrea.sh
 RUN git clone https://github.com/XR-Robotics/XRoboToolkit-PC-Service.git /tmp/xrobo && \
     git -C /tmp/xrobo checkout "${XROBO_COMMIT}" && \
-    bash /tmp/xrobo/RoboticsService/PXREARobotSDK/build.sh && \
-    mkdir -p thirdparty/pxrea/include thirdparty/pxrea/lib && \
-    cp /tmp/xrobo/RoboticsService/PXREARobotSDK/PXREARobotSDK.h thirdparty/pxrea/include/ && \
-    cp -r /tmp/xrobo/RoboticsService/PXREARobotSDK/nlohmann thirdparty/pxrea/include/nlohmann && \
-    cp /tmp/xrobo/RoboticsService/PXREARobotSDK/build/libPXREARobotSDK.so thirdparty/pxrea/lib/ && \
+    bash /tmp/build_pxrea.sh /tmp/xrobo/RoboticsService/PXREARobotSDK "$(pwd)" && \
     rm -rf /tmp/xrobo
 
 # ─── vendored dep: unitree_sdk2 (cloned + pinned) ─────────────────────────────
