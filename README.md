@@ -21,6 +21,12 @@ C++ inference pipeline for GR00T WholeBodyControl on the Unitree G1 humanoid rob
 
 ## Installation
 
+#### 0. Onboard Orin (Jetson) only
+
+Running gearsonic on the onboard Orin needs one-time JetPack/docker setup
+before anything below — see [docs/jetson_setup.md](docs/jetson_setup.md).
+Skip on an x86_64 workstation.
+
 #### 1. Clone Repository
 
 ```bash
@@ -57,8 +63,7 @@ The image bakes in everything below (SDKs, toolchain, models, and the build):
 `build.sh` auto-selects the Dockerfile by architecture: `docker/Dockerfile`
 on x86_64 (workstation), `docker/Dockerfile.aarch64` on the Jetson / onboard
 Orin (running gearsonic onboard removes the PC↔robot link entirely). Same
-image tag, so `run.sh` is identical on both. The onboard Orin needs one-time
-JetPack/docker setup first — see [docs/jetson_setup.md](docs/jetson_setup.md).
+image tag, so `run.sh` is identical on both.
 
 `run.sh` wires `--gpus all` (TensorRT), `--network host` (unitree/VLA DDS +
 the VR daemon), and `--cap-add=SYS_NICE` (RT thread priorities). The numbered
