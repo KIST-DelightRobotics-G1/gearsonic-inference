@@ -2,8 +2,8 @@
 # whole controller runs onboard and the PC<->robot link (the fall-risk path)
 # disappears. Mirrors docker/Dockerfile (x86 workstation) but for JetPack 6 /
 # L4T: the base is NVIDIA's Jetson TensorRT image (arm64, TRT 10.x/CUDA 12),
-# and PXREA is built via docker/build_pxrea.sh because XRoboToolkit ships an
-# empty aarch64 grpc bundle (see that script).
+# and PXREA's gRPC stubs are regenerated from the .proto (see the PXREA step)
+# because XRoboToolkit ships an empty aarch64 grpc bundle.
 #
 # Build/run ON the Orin (arm64) — this image does not build on x86.
 #   docker/build_aarch64.sh   then   docker/run.sh
@@ -60,19 +60,38 @@ ENV CYCLONEDDS_HOME=/opt/cyclonedds
 WORKDIR /workspace/kist-gearsonic-inference
 
 # ─── vendored dep: PXREA VR client SDK (cloned + built + staged) ──────────────
-# XRoboToolkit-PC-Service pinned. Its aarch64 grpc bundle ships EMPTY, so
-# build_pxrea.sh regenerates the gRPC stubs from the .proto and links apt's
-# grpc++/protobuf (installed here) — see that script. The client .so + headers
-# land under thirdparty/pxrea; the VR daemon itself runs host-side.
+# XRoboToolkit-PC-Service pinned. Its aarch64 grpc bundle ships EMPTY
+# (Redistributable/linux_aarch64/grpc/{include,lib} are just .gitkeep) and the
+# pre-generated aarch64 stubs need protobuf 5.x (runtime_version.h) apt lacks —
+# so upstream's build.sh cannot work here. Instead REGENERATE the gRPC stubs
+# from the .proto with apt's protoc (generated code then matches apt protobuf)
+# and compile the .so against apt grpc++. -DLINUX_aarch64 selects the Linux
+# code paths in PXREARobotSDK.cpp (its <thread>/OutputDebug members live behind
+# `#if defined(LINUX_x86) || defined(LINUX_aarch64)`). The client .so + headers
+# land under thirdparty/pxrea; the VR daemon itself is installed separately.
 ARG XROBO_COMMIT=85bac4dbc1fd5cef42c74a160d9c30aa3491f122
 RUN apt-get update && apt-get install -y --no-install-recommends \
         protobuf-compiler protobuf-compiler-grpc libgrpc++-dev libprotobuf-dev \
-    && rm -rf /var/lib/apt/lists/*
-COPY docker/build_pxrea.sh /tmp/build_pxrea.sh
-RUN git clone https://github.com/XR-Robotics/XRoboToolkit-PC-Service.git /tmp/xrobo && \
+    && rm -rf /var/lib/apt/lists/* && \
+    git clone https://github.com/XR-Robotics/XRoboToolkit-PC-Service.git /tmp/xrobo && \
     git -C /tmp/xrobo checkout "${XROBO_COMMIT}" && \
-    bash /tmp/build_pxrea.sh /tmp/xrobo/RoboticsService/PXREARobotSDK "$(pwd)" && \
-    rm -rf /tmp/xrobo
+    SDK=/tmp/xrobo/RoboticsService/PXREARobotSDK && \
+    PROTO="$SDK/../PXREAService" && \
+    GEN=$(mktemp -d) && \
+    protoc -I"$PROTO" -I/usr/include \
+        --cpp_out="$GEN" --grpc_out="$GEN" \
+        --plugin=protoc-gen-grpc="$(which grpc_cpp_plugin)" \
+        "$PROTO/PXREAService.proto" && \
+    g++ -std=c++17 -fPIC -shared -O2 -DLINUX_aarch64 \
+        -I"$SDK" -I"$GEN" \
+        "$SDK/PXREARobotSDK.cpp" "$GEN/PXREAService.pb.cc" "$GEN/PXREAService.grpc.pb.cc" \
+        $(pkg-config --cflags --libs grpc++ protobuf) \
+        -o "$GEN/libPXREARobotSDK.so" && \
+    mkdir -p thirdparty/pxrea/include thirdparty/pxrea/lib && \
+    cp "$SDK/PXREARobotSDK.h" thirdparty/pxrea/include/ && \
+    cp -r "$SDK/nlohmann" thirdparty/pxrea/include/nlohmann && \
+    cp "$GEN/libPXREARobotSDK.so" thirdparty/pxrea/lib/ && \
+    rm -rf /tmp/xrobo "$GEN"
 
 # ─── vendored dep: unitree_sdk2 (cloned + pinned) ─────────────────────────────
 # Same pin as kist-ext-sensor-io — its bundled libddscxx 0.10.2 matches the
