@@ -43,16 +43,7 @@ sudo dpkg -i XRoboToolkit_PC_Service_1.0.0_ubuntu_22.04_amd64.deb
 ```
 
 **aarch64 onboard (Jetson / Orin):** nothing to install on the host — the
-arm64 daemon is built for Ubuntu 22.04 (GLIBC 2.34 + Qt6) and won't run on
-the 20.04 Orin, so `Dockerfile.aarch64` bakes the headless daemon INTO the
-image. Start it from inside the container (`./docker/run.sh`):
-
-```bash
-source env.sh && run_vr_daemon      # daemon on :60061, in-container
-```
-
-The bare-metal install below (`sudo dpkg -i …arm64.deb`) only works if the
-host is itself 22.04.
+daemon is baked into the image. See [docs/jetson_setup.md](docs/jetson_setup.md).
 
 #### Quick Start with Docker
 
@@ -66,27 +57,8 @@ The image bakes in everything below (SDKs, toolchain, models, and the build):
 `build.sh` auto-selects the Dockerfile by architecture: `docker/Dockerfile`
 on x86_64 (workstation), `docker/Dockerfile.aarch64` on the Jetson / onboard
 Orin (running gearsonic onboard removes the PC↔robot link entirely). Same
-image tag, so `run.sh` is identical on both.
-
-**Jetson (onboard Orin) one-time docker setup** — `/etc/docker/daemon.json`
-needs three things for this repo to build and run on JetPack 6, then
-`sudo systemctl restart docker`:
-
-```json
-{
-  "runtimes": { "nvidia": { "path": "nvidia-container-runtime", "args": [] } },
-  "default-runtime": "nvidia",
-  "iptables": false
-}
-```
-
-- `default-runtime: nvidia` — injects the host's CUDA/TensorRT/**DLA** libs
-  (libnvinfer needs libnvdla_compiler/libnvcudla) at BUILD time too, not just
-  at run; without it the link step fails with `undefined reference to nvdla::`.
-- `iptables: false` — the Orin kernel lacks the iptables `raw` table; without
-  this docker networking fails to initialize. `build.sh` and `run.sh` use
-  `--network host`, which needs no bridge NAT.
-- `nvidia-ctk runtime configure --runtime=docker` writes the `runtimes` entry.
+image tag, so `run.sh` is identical on both. The onboard Orin needs one-time
+JetPack/docker setup first — see [docs/jetson_setup.md](docs/jetson_setup.md).
 
 `run.sh` wires `--gpus all` (TensorRT), `--network host` (unitree/VLA DDS +
 the VR daemon), and `--cap-add=SYS_NICE` (RT thread priorities). The numbered
