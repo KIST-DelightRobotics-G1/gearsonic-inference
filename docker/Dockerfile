@@ -75,6 +75,28 @@ ARG UNITREE_SDK2_COMMIT=21d0a3b2c46ee48c8fdf2783becb6be3beb0a59b
 RUN git clone https://github.com/unitreerobotics/unitree_sdk2.git thirdparty/unitree_sdk2 && \
     git -C thirdparty/unitree_sdk2 checkout "${UNITREE_SDK2_COMMIT}"
 
+# ─── VR daemon: XRoboToolkit PC service (in-image, amd64) ─────────────────────
+# gearsonic needs the VR daemon (port 60061; it carries teleop tracking AND the
+# e-stop). Bake it into the image so `source env.sh && run_vr_daemon` runs in
+# the container — no host-side dpkg (same as Dockerfile.aarch64). The amd64 .deb
+# is built for Ubuntu 24.04, matching this base, and bundles its own Qt6/ICU/
+# openssl under /opt/apps/roboticsservice/lib (env.sh scopes LD_LIBRARY_PATH
+# there) — so only glib + krb5 come from apt, no Qt/ICU wrangling. Its postinst
+# is desktop-icon registration (xdg-icon-resource), pure GUI packaging cruft
+# that exits non-zero and fails the build, so install via dpkg --unpack, stub
+# the postinst, then --configure. The daemon runs headless and reaches the
+# headset over WiFi (no USB passthrough / display).
+ARG XROBO_DEB=XRoboToolkit_PC_Service_1.0.0_ubuntu_24.04_amd64.deb
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libglib2.0-0t64 libgssapi-krb5-2 && \
+    wget -q -O /tmp/xrobo.deb \
+        "https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases/download/v1.0.0/${XROBO_DEB}" && \
+    dpkg --unpack /tmp/xrobo.deb && \
+    (echo '#!/bin/sh' > /var/lib/dpkg/info/roboticsservice.postinst; \
+     chmod +x /var/lib/dpkg/info/roboticsservice.postinst) && \
+    dpkg --configure roboticsservice && \
+    rm -f /tmp/xrobo.deb && rm -rf /var/lib/apt/lists/*
+
 # ─── models: GEAR-SONIC ONNX ──────────────────────────────────────────────────
 # TensorRT engines (.trt) are generated next to them on first run.
 RUN wget -q -P models \

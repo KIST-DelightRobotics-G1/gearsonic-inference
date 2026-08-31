@@ -36,18 +36,19 @@ cd kist-gearsonic-inference
 
 All following steps run from the repository root.
 
-#### 2. Install XRoboToolkit (host-side)
+#### 2. XRoboToolkit VR daemon
 
-The VR daemon talks to the headset and runs on the host; the container
-reaches it via `--network host`.
+The VR daemon (teleop tracking + e-stop) is **baked into the Docker image** on
+both architectures — nothing to install for the Docker path. Start it inside
+the container with `source env.sh && run_vr_daemon` (see Usage).
+
+Only for a manual (non-Docker) build does it run host-side — install the .deb
+matching your Ubuntu version:
 
 ```bash
-wget https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases/download/v1.0.0/XRoboToolkit_PC_Service_1.0.0_ubuntu_22.04_amd64.deb
-sudo dpkg -i XRoboToolkit_PC_Service_1.0.0_ubuntu_22.04_amd64.deb
+wget https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases/download/v1.0.0/XRoboToolkit_PC_Service_1.0.0_ubuntu_24.04_amd64.deb
+sudo dpkg -i XRoboToolkit_PC_Service_1.0.0_ubuntu_24.04_amd64.deb
 ```
-
-On the onboard Orin this is baked into the image instead — nothing to install
-(see [step 0](#0-onboard-orin-jetson-only)).
 
 #### Quick Start with Docker
 
@@ -65,8 +66,8 @@ image tag, so `run.sh` is identical on both.
 
 `run.sh` wires `--gpus all` (TensorRT), `--network host` (unitree/VLA DDS +
 the VR daemon), and `--cap-add=SYS_NICE` (RT thread priorities). The numbered
-steps below (3–8) are the manual (non-Docker) alternative — steps 1–2
-above are required either way.
+steps below (3–8) are the manual (non-Docker) alternative — for the Docker
+path only step 1 (clone) is needed; the daemon in step 2 is baked in.
 
 #### 3. Install libPXREARobotSDK
 
@@ -154,10 +155,11 @@ Set up the config once before running:
 controller in reach (A+B+X+Y held 1s = emergency stop).
 
 ```bash
-# host: VR daemon (required in every mode — it carries the e-stop)
+# VR daemon (required in every mode — it carries the e-stop). Baked into the
+# image: run it in the container. (Manual/non-Docker build: run it on the host.)
 source env.sh && run_vr_daemon
 
-# container: control (3s ramp to standing, then policy control)
+# control (3s ramp to standing, then policy control)
 ./build/kist-gearsonic-inference
 ```
 
