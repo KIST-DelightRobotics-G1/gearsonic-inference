@@ -7,16 +7,20 @@
 
 namespace kist {
 
-// Encoder buffer offsets (observation_config.yaml order; see header)
+// Encoder buffer offsets — SONIC v1.1 layout (sonic_v1_1/observation_config.yaml
+// order; see header). Cross-checked 2026-08-28 by perturbation-probing the
+// v1.1 ONNX graph's live input regions. v1.1 dropped the release layout's
+// unused [584:595] gap (hence 1751 vs 1762) and moved the single-frame
+// anchor behind the g1 anchor block, so every offset from 584 on shifted.
 static constexpr size_t kOffEncoderMode  = 0;
 static constexpr size_t kOffMotionQ      = 4;    // g1 mode
 static constexpr size_t kOffMotionDq     = 294;
-static constexpr size_t kOffAnchorSingle = 595;  // teleop mode
-static constexpr size_t kOffAnchorOri    = 601;  // g1 mode
-static constexpr size_t kOffLowerQ       = 661;  // teleop mode
-static constexpr size_t kOffLowerDq      = 781;
-static constexpr size_t kOffVR3Pos       = 901;
-static constexpr size_t kOffVR3Orn       = 910;
+static constexpr size_t kOffAnchorOri    = 584;  // g1 mode      (release: 601)
+static constexpr size_t kOffAnchorSingle = 644;  // teleop mode  (release: 595)
+static constexpr size_t kOffLowerQ       = 650;  // teleop mode  (release: 661)
+static constexpr size_t kOffLowerDq      = 770;  //              (release: 781)
+static constexpr size_t kOffVR3Pos       = 890;  //              (release: 901)
+static constexpr size_t kOffVR3Orn       = 899;  //              (release: 910)
 
 static constexpr int kNumJoints  = MotionSequence50Hz::kNumJoints;
 static constexpr int kFutFrames  = 10;   // *_10frame_step5

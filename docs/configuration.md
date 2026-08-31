@@ -24,7 +24,7 @@ bakes it in).
 
 | Key | Default | Meaning |
 |---|---|---|
-| `encoder_path` | `models/model_encoder.onnx` | encoder: motion observation [1762] → token [64] |
+| `encoder_path` | `models/model_encoder.onnx` | encoder: motion observation [1751] → token [64] |
 | `decoder_path` | `models/model_decoder.onnx` | decoder (policy): observation [994] → joint action [29] |
 
 ## VLA-mode constants (compile-time)

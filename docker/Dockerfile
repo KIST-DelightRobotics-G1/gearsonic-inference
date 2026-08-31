@@ -100,8 +100,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ─── models: GEAR-SONIC ONNX ──────────────────────────────────────────────────
 # TensorRT engines (.trt) are generated next to them on first run.
 RUN wget -q -P models \
-    https://huggingface.co/nvidia/GEAR-SONIC/resolve/main/model_encoder.onnx \
-    https://huggingface.co/nvidia/GEAR-SONIC/resolve/main/model_decoder.onnx \
+    https://huggingface.co/nvidia/GEAR-SONIC/resolve/main/sonic_v1_1/model_encoder.onnx \
+    https://huggingface.co/nvidia/GEAR-SONIC/resolve/main/sonic_v1_1/model_decoder.onnx \
     https://huggingface.co/nvidia/GEAR-SONIC/resolve/main/planner_sonic.onnx
 
 # ─── source + build ───────────────────────────────────────────────────────────
