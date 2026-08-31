@@ -30,26 +30,18 @@ Set `/etc/docker/daemon.json`, then `sudo systemctl restart docker`:
   `--network host`, which needs no bridge NAT.
 - `nvidia-ctk runtime configure --runtime=docker` writes the `runtimes` entry.
 
-## 3. VR daemon
+## 3. Power mode & clocks
 
-Nothing to install on the host — the arm64 daemon is built for Ubuntu 22.04
-and won't run on the Orin, so `Dockerfile.aarch64` bakes the headless daemon
-INTO the image. Start it from inside the container:
-
-```bash
-source env.sh && run_vr_daemon      # daemon on :60061, in-container
-```
-
-## 4. Build & run
-
-`build.sh` auto-selects `Dockerfile.aarch64` on aarch64; same image tag, so
-`run.sh` is identical to x86.
+Run at max power mode and lock the clocks to their peak (otherwise the
+governor throttles the GPU/CPU and inference falls behind real time):
 
 ```bash
-./docker/build.sh
-./docker/run.sh
+sudo nvpmodel -m 0      # MAXN — highest power mode
+sudo jetson_clocks      # pin CPU/GPU/EMC clocks to max
 ```
 
-Set `unitree.network_interface` to the Orin's robot-facing NIC (e.g.
-`enP8p1s0`, check `ip -br addr`) — edit `config/config.yaml` inside the
-running container.
+`nvpmodel -m 0` persists across reboots; `jetson_clocks` does not — re-run it
+after each boot (or install it as a boot service).
+
+Once this system setup is done, build and run as on any host
+([README](../README.md) Installation).
