@@ -36,23 +36,10 @@ cd kist-gearsonic-inference
 
 All following steps run from the repository root.
 
-#### 2. XRoboToolkit VR daemon
-
-The VR daemon (teleop tracking + e-stop) is **baked into the Docker image** on
-both architectures — nothing to install for the Docker path. Start it inside
-the container with `source env.sh && run_vr_daemon` (see Usage).
-
-Only for a manual (non-Docker) build does it run host-side — install the .deb
-matching your Ubuntu version:
-
-```bash
-wget https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases/download/v1.0.0/XRoboToolkit_PC_Service_1.0.0_ubuntu_24.04_amd64.deb
-sudo dpkg -i XRoboToolkit_PC_Service_1.0.0_ubuntu_24.04_amd64.deb
-```
-
 #### Quick Start with Docker
 
-The image bakes in everything below (SDKs, toolchain, models, and the build):
+The image bakes in everything (SDKs, toolchain, models, the build, and the VR
+daemon):
 
 ```bash
 ./docker/build.sh      # builds the image (docker build -t kist-gearsonic-inference)
@@ -65,9 +52,23 @@ Orin (running gearsonic onboard removes the PC↔robot link entirely). Same
 image tag, so `run.sh` is identical on both.
 
 `run.sh` wires `--gpus all` (TensorRT), `--network host` (unitree/VLA DDS +
-the VR daemon), and `--cap-add=SYS_NICE` (RT thread priorities). The numbered
-steps below (3–8) are the manual (non-Docker) alternative — for the Docker
-path only step 1 (clone) is needed; the daemon in step 2 is baked in.
+the VR daemon), and `--cap-add=SYS_NICE` (RT thread priorities). For the Docker
+path only step 1 (clone) is needed — the numbered steps 2–8 below are the
+manual (non-Docker) alternative.
+
+#### 2. XRoboToolkit VR daemon
+
+The VR daemon (teleop tracking + e-stop) is **baked into the Docker image** on
+both architectures, so the Docker path needs nothing here — start it inside the
+container with `source env.sh && run_vr_daemon` (see Usage).
+
+For a manual (non-Docker) build it runs host-side — install the .deb matching
+your Ubuntu version:
+
+```bash
+wget https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases/download/v1.0.0/XRoboToolkit_PC_Service_1.0.0_ubuntu_24.04_amd64.deb
+sudo dpkg -i XRoboToolkit_PC_Service_1.0.0_ubuntu_24.04_amd64.deb
+```
 
 #### 3. Install libPXREARobotSDK
 
