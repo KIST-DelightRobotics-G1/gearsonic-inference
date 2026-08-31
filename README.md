@@ -38,23 +38,16 @@ All following steps run from the repository root.
 
 #### Quick Start with Docker
 
-The image bakes in everything (SDKs, toolchain, models, the build, and the VR
-daemon):
+The image bakes in everything — SDKs, toolchain, models, build, VR daemon.
+`build.sh` picks the Dockerfile for your architecture (x86 / Jetson).
 
 ```bash
-./docker/build.sh      # builds the image (docker build -t kist-gearsonic-inference)
-./docker/run.sh        # shell in the container; prebuilt binaries under build/
+./docker/build.sh      # build the image
+./docker/run.sh        # shell in the container; binaries under build/
 ```
 
-`build.sh` auto-selects the Dockerfile by architecture: `docker/Dockerfile`
-on x86_64 (workstation), `docker/Dockerfile.aarch64` on the Jetson / onboard
-Orin (running gearsonic onboard removes the PC↔robot link entirely). Same
-image tag, so `run.sh` is identical on both.
-
-`run.sh` wires `--gpus all` (TensorRT), `--network host` (unitree/VLA DDS +
-the VR daemon), and `--cap-add=SYS_NICE` (RT thread priorities). For the Docker
-path only step 1 (clone) is needed — the numbered steps 2–8 below are the
-manual (non-Docker) alternative.
+This is the whole setup; the numbered steps 2–8 below are the manual
+(non-Docker) alternative.
 
 #### 2. XRoboToolkit VR daemon
 
