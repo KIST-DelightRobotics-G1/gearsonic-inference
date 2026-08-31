@@ -1,9 +1,12 @@
 unitree:
   # DDS domain id (default 0; change to isolate multiple robots on one network)
   domain_id: 0
-  # Network interface connected to the robot (e.g. eno1, enp0s31f6)
-  # Use "lo" for simulation.
-  network_interface: eno2
+  # DDS interface. "lo" = simulator (same-host) — the safe default to clone
+  # with. For a REAL robot set your robot-facing NIC and REBUILD/point config
+  # at it: x86 workstation e.g. eno2, onboard Orin enP8p1s0 (check with
+  # `ip -br addr`). lowstate/lowcmd never arrive on "lo", so a real run left
+  # on "lo" just waits for robot state forever.
+  network_interface: lo
 
 planner:
   # ONNX file; the wrapper caches the built engine next to it as .trt

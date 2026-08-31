@@ -21,6 +21,12 @@ C++ inference pipeline for GR00T WholeBodyControl on the Unitree G1 humanoid rob
 
 ## Installation
 
+#### 0. Onboard Orin (Jetson) only
+
+Running gearsonic on the onboard Orin needs one-time JetPack/docker setup
+before anything below — see [docs/jetson_setup.md](docs/jetson_setup.md).
+Skip on an x86_64 workstation.
+
 #### 1. Clone Repository
 
 ```bash
@@ -32,13 +38,16 @@ All following steps run from the repository root.
 
 #### 2. Install XRoboToolkit (host-side)
 
-The VR daemon talks to the headset over USB and runs on the host; the
-container reaches it via `--network host`.
+The VR daemon talks to the headset and runs on the host; the container
+reaches it via `--network host`.
 
 ```bash
 wget https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases/download/v1.0.0/XRoboToolkit_PC_Service_1.0.0_ubuntu_22.04_amd64.deb
 sudo dpkg -i XRoboToolkit_PC_Service_1.0.0_ubuntu_22.04_amd64.deb
 ```
+
+On the onboard Orin this is baked into the image instead — nothing to install
+(see [step 0](#0-onboard-orin-jetson-only)).
 
 #### Quick Start with Docker
 
@@ -48,6 +57,11 @@ The image bakes in everything below (SDKs, toolchain, models, and the build):
 ./docker/build.sh      # builds the image (docker build -t kist-gearsonic-inference)
 ./docker/run.sh        # shell in the container; prebuilt binaries under build/
 ```
+
+`build.sh` auto-selects the Dockerfile by architecture: `docker/Dockerfile`
+on x86_64 (workstation), `docker/Dockerfile.aarch64` on the Jetson / onboard
+Orin (running gearsonic onboard removes the PC↔robot link entirely). Same
+image tag, so `run.sh` is identical on both.
 
 `run.sh` wires `--gpus all` (TensorRT), `--network host` (unitree/VLA DDS +
 the VR daemon), and `--cap-add=SYS_NICE` (RT thread priorities). The numbered

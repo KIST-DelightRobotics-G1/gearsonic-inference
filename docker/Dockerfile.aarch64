@@ -1,0 +1,149 @@
+# Jetson (aarch64) container — gearsonic ON the robot's onboard Orin, so the
+# whole controller runs onboard and the PC<->robot link (the fall-risk path)
+# disappears. Mirrors docker/Dockerfile (x86 workstation) but for JetPack 6 /
+# L4T: the base is NVIDIA's Jetson TensorRT image (arm64, TRT 10.x/CUDA 12),
+# and PXREA's gRPC stubs are regenerated from the .proto (see the PXREA step)
+# because XRoboToolkit ships an empty aarch64 grpc bundle.
+#
+# Build/run ON the Orin (arm64) — this image does not build on x86.
+#   docker/build_aarch64.sh   then   docker/run.sh
+#
+# Self-contained like the x86 image: deps cloned/built in-image, models
+# downloaded, source baked in. VR daemon still runs host-side (here, the
+# onboard host) over --network host.
+#
+# Base: the -igpu (integrated GPU) TensorRT variant — the plain -py3 tag
+# resolves on arm64 but its TRT cannot build engines for the Orin's GPU
+# (SM 87), failing with "Target GPU SM 87 is not supported". -igpu is
+# NVIDIA's Jetson build and supports SM 87.
+FROM nvcr.io/nvidia/tensorrt:24.12-py3-igpu
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ─── build tools + system deps ────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    pkg-config \
+    ca-certificates \
+    wget \
+    libyaml-cpp-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# ─── CycloneDDS idlc toolchain (VLA DDS types codegen) ────────────────────────
+# 0.10.2 pinned to match unitree_sdk2's bundled libddscxx, so generated type
+# headers stay ABI/format-compatible with the SDK's runtime libs. Installed
+# to /opt as a BUILD tool only — deliberately no LD_LIBRARY_PATH (idlc finds
+# its own libs via RUNPATH); exposing its libddsc at runtime would shadow the
+# SDK's vendored .so. Same convention as kist-ext-sensor-io.
+ARG CYCLONEDDS_VERSION=0.10.2
+RUN git clone --depth 1 --branch "${CYCLONEDDS_VERSION}" \
+        https://github.com/eclipse-cyclonedds/cyclonedds.git /tmp/cyclonedds && \
+    cmake -S /tmp/cyclonedds -B /tmp/cyclonedds/build \
+        -DCMAKE_INSTALL_PREFIX=/opt/cyclonedds \
+        -DBUILD_IDLC=ON -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_EXAMPLES=OFF -DENABLE_SECURITY=OFF && \
+    cmake --build /tmp/cyclonedds/build --target install -j "$(nproc)" && \
+    git clone --depth 1 --branch "${CYCLONEDDS_VERSION}" \
+        https://github.com/eclipse-cyclonedds/cyclonedds-cxx.git /tmp/cyclonedds-cxx && \
+    cmake -S /tmp/cyclonedds-cxx -B /tmp/cyclonedds-cxx/build \
+        -DCMAKE_INSTALL_PREFIX=/opt/cyclonedds \
+        -DCMAKE_PREFIX_PATH=/opt/cyclonedds -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_EXAMPLES=OFF && \
+    cmake --build /tmp/cyclonedds-cxx/build --target install -j "$(nproc)" && \
+    rm -rf /tmp/cyclonedds /tmp/cyclonedds-cxx
+ENV PATH=/opt/cyclonedds/bin:${PATH}
+ENV CYCLONEDDS_HOME=/opt/cyclonedds
+
+WORKDIR /workspace/kist-gearsonic-inference
+
+# ─── vendored dep: PXREA VR client SDK (cloned + built + staged) ──────────────
+# XRoboToolkit-PC-Service pinned. Its aarch64 grpc bundle ships EMPTY
+# (Redistributable/linux_aarch64/grpc/{include,lib} are just .gitkeep) and the
+# pre-generated aarch64 stubs need protobuf 5.x (runtime_version.h) apt lacks —
+# so upstream's build.sh cannot work here. Instead REGENERATE the gRPC stubs
+# from the .proto with apt's protoc (generated code then matches apt protobuf)
+# and compile the .so against apt grpc++. -DLINUX_aarch64 selects the Linux
+# code paths in PXREARobotSDK.cpp (its <thread>/OutputDebug members live behind
+# `#if defined(LINUX_x86) || defined(LINUX_aarch64)`). The client .so + headers
+# land under thirdparty/pxrea; the VR daemon itself is installed separately.
+ARG XROBO_COMMIT=85bac4dbc1fd5cef42c74a160d9c30aa3491f122
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        protobuf-compiler protobuf-compiler-grpc libgrpc++-dev libprotobuf-dev \
+    && rm -rf /var/lib/apt/lists/* && \
+    git clone https://github.com/XR-Robotics/XRoboToolkit-PC-Service.git /tmp/xrobo && \
+    git -C /tmp/xrobo checkout "${XROBO_COMMIT}" && \
+    SDK=/tmp/xrobo/RoboticsService/PXREARobotSDK && \
+    PROTO="$SDK/../PXREAService" && \
+    GEN=$(mktemp -d) && \
+    protoc -I"$PROTO" -I/usr/include \
+        --cpp_out="$GEN" --grpc_out="$GEN" \
+        --plugin=protoc-gen-grpc="$(which grpc_cpp_plugin)" \
+        "$PROTO/PXREAService.proto" && \
+    g++ -std=c++17 -fPIC -shared -O2 -DLINUX_aarch64 \
+        -I"$SDK" -I"$GEN" \
+        "$SDK/PXREARobotSDK.cpp" "$GEN/PXREAService.pb.cc" "$GEN/PXREAService.grpc.pb.cc" \
+        $(pkg-config --cflags --libs grpc++ protobuf) \
+        -o "$GEN/libPXREARobotSDK.so" && \
+    mkdir -p thirdparty/pxrea/include thirdparty/pxrea/lib && \
+    cp "$SDK/PXREARobotSDK.h" thirdparty/pxrea/include/ && \
+    cp -r "$SDK/nlohmann" thirdparty/pxrea/include/nlohmann && \
+    cp "$GEN/libPXREARobotSDK.so" thirdparty/pxrea/lib/ && \
+    rm -rf /tmp/xrobo "$GEN"
+
+# ─── vendored dep: unitree_sdk2 (cloned + pinned) ─────────────────────────────
+# Same pin as kist-ext-sensor-io — its bundled libddscxx 0.10.2 matches the
+# idlc built above, so generated DDS types stay ABI-compatible.
+ARG UNITREE_SDK2_COMMIT=21d0a3b2c46ee48c8fdf2783becb6be3beb0a59b
+RUN git clone https://github.com/unitreerobotics/unitree_sdk2.git thirdparty/unitree_sdk2 && \
+    git -C thirdparty/unitree_sdk2 checkout "${UNITREE_SDK2_COMMIT}"
+
+# ─── VR daemon: XRoboToolkit PC service (in-image, aarch64) ───────────────────
+# On x86 the daemon runs on the host from a .deb; the arm64 .deb is built for
+# Ubuntu 22.04 (GLIBC 2.34 + Qt6) and won't run natively on this 20.04 Orin.
+# The TensorRT base here IS 22.04, so we install it INTO the image instead —
+# one container then serves both the daemon (port 60061) and gearsonic, over
+# --network host. Only Qt6 is needed from apt (the daemon bundles the rest);
+# the headset connects to the daemon over WiFi, so no USB passthrough.
+# The headless .deb's postinst does desktop icon registration
+# (xdg-icon-resource, gtk-update-icon-cache) — pure GUI packaging cruft,
+# irrelevant to the daemon, but any missing tool makes postinst exit non-zero
+# and fail the build. Provide the icon tools (xdg-utils, libgtk-3-bin) AND
+# neutralize the postinst by stubbing its exit so packaging noise can never
+# break the image; the daemon binary itself unpacks fine regardless.
+ARG XROBO_VERSION=1.0.0.0
+# The base is Ubuntu 24.04 (ICU 74), but the daemon links libicuuc.so.70
+# (built on 22.04). Install the exact libicu70 from the 22.04 pool alongside
+# 24.04's own ICU (they coexist — versioned sonames) so the daemon finds its
+# soname without an ABI-gamble symlink.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libqt6core6 libqt6network6 libqt6core5compat6 \
+        xdg-utils libgtk-3-bin && \
+    wget -q -O /tmp/libicu70.deb \
+        "http://ports.ubuntu.com/pool/main/i/icu/libicu70_70.1-2_arm64.deb" && \
+    (dpkg -i /tmp/libicu70.deb || apt-get install -f -y) && rm -f /tmp/libicu70.deb && \
+    wget -q -O /tmp/xrobo.deb \
+        "https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases/download/v1.0.0/XRoboToolkit-PC-Service-headless_${XROBO_VERSION}_arm64.deb" && \
+    dpkg --unpack /tmp/xrobo.deb && \
+    (echo '#!/bin/sh' > /var/lib/dpkg/info/roboticsservice.postinst; \
+     chmod +x /var/lib/dpkg/info/roboticsservice.postinst) && \
+    dpkg --configure roboticsservice && \
+    rm -f /tmp/xrobo.deb && rm -rf /var/lib/apt/lists/*
+
+# ─── models: GEAR-SONIC ONNX ──────────────────────────────────────────────────
+# TensorRT engines (.trt) are generated next to them on first run.
+RUN wget -q -P models \
+    https://huggingface.co/nvidia/GEAR-SONIC/resolve/main/model_encoder.onnx \
+    https://huggingface.co/nvidia/GEAR-SONIC/resolve/main/model_decoder.onnx \
+    https://huggingface.co/nvidia/GEAR-SONIC/resolve/main/planner_sonic.onnx
+
+# ─── source + build ───────────────────────────────────────────────────────────
+# Bake the repo in (build context = repo root, minus build*/, .git and the
+# in-image vendored dirs via .dockerignore). The dep layers above stay
+# cached; only this re-runs on a source change.
+COPY . .
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j"$(nproc)"
+
+CMD ["/bin/bash"]
