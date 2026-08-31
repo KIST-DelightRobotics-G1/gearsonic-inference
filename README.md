@@ -163,5 +163,3 @@ Both modes run from the same binary; ownership is first-come:
   [docs/teleop_mode.md](docs/teleop_mode.md)
 - **VLA mode** — external latent tokens from kist-vla-inference over DDS:
   [docs/vla_mode.md](docs/vla_mode.md)
-
-> Embedding as a C++ library: [docs/embedding.md](docs/embedding.md)
