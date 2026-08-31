@@ -68,6 +68,26 @@ on x86_64 (workstation), `docker/Dockerfile.aarch64` on the Jetson / onboard
 Orin (running gearsonic onboard removes the PC↔robot link entirely). Same
 image tag, so `run.sh` is identical on both.
 
+**Jetson (onboard Orin) one-time docker setup** — `/etc/docker/daemon.json`
+needs three things for this repo to build and run on JetPack 6, then
+`sudo systemctl restart docker`:
+
+```json
+{
+  "runtimes": { "nvidia": { "path": "nvidia-container-runtime", "args": [] } },
+  "default-runtime": "nvidia",
+  "iptables": false
+}
+```
+
+- `default-runtime: nvidia` — injects the host's CUDA/TensorRT/**DLA** libs
+  (libnvinfer needs libnvdla_compiler/libnvcudla) at BUILD time too, not just
+  at run; without it the link step fails with `undefined reference to nvdla::`.
+- `iptables: false` — the Orin kernel lacks the iptables `raw` table; without
+  this docker networking fails to initialize. `build.sh` and `run.sh` use
+  `--network host`, which needs no bridge NAT.
+- `nvidia-ctk runtime configure --runtime=docker` writes the `runtimes` entry.
+
 `run.sh` wires `--gpus all` (TensorRT), `--network host` (unitree/VLA DDS +
 the VR daemon), and `--cap-add=SYS_NICE` (RT thread priorities). The numbered
 steps below (3–8) are the manual (non-Docker) alternative — steps 1–2
