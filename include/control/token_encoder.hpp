@@ -18,27 +18,28 @@ namespace kist {
 // orchestrator (WholeBodyController) decides when to run it, and
 // operational signals (e-stop, safety) never enter this class.
 //
-// Encoder obs_dict [1762]; the mode is chosen per tick by the presence of
-// VR 3-point data (observation_config.yaml encoder_modes):
+// Encoder obs_dict [1751] — SONIC v1.1 (sonic_v1_1/observation_config.yaml);
+// the mode is chosen per tick by the presence of VR 3-point data:
 //
 // g1 (0) — planner drives the whole body:
 //   [0:4]     encoder_mode_4            (mode id, then zeros)
 //   [4:294]   motion_joint_positions_10frame_step5   (IsaacLab order)
 //   [294:584] motion_joint_velocities_10frame_step5
-//   [601:661] motion_anchor_orientation_10frame_step5
+//   [584:644] motion_anchor_orientation_heading_10frame_step5
 //
 // teleop (1) — planner drives the lower body, VR 3-point the upper:
 //   [0:4]     encoder_mode_4
-//   [595:601] motion_anchor_orientation  (single frame)
-//   [661:781] motion_joint_positions_lowerbody_10frame_step5
-//   [781:901] motion_joint_velocities_lowerbody_10frame_step5
-//   [901:910] vr_3point_local_target
-//   [910:922] vr_3point_local_orn_target
+//   [644:650] motion_anchor_orientation_heading  (single frame)
+//   [650:770] motion_joint_positions_lowerbody_10frame_step5
+//   [770:890] motion_joint_velocities_lowerbody_10frame_step5
+//   [890:899] vr_3point_local_target
+//   [899:911] vr_3point_local_orn_target
 //
-// Slots of the other modes stay zero.
+// Slots of the other modes stay zero. (The release checkpoint used dim 1762
+// with the anchor at [601:661]; v1.1 removed the unused [584:595] gap.)
 class TokenEncoder {
 public:
-    static constexpr size_t kInputDim = 1762;
+    static constexpr size_t kInputDim = 1751;
     static constexpr size_t kTokenDim = 64;
     using Token = std::array<float, kTokenDim>;
 

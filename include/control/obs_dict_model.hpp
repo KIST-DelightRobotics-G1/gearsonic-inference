@@ -12,7 +12,7 @@ namespace kist {
 // (gear_sonic has separate EncoderEngine / PolicyEngine classes with
 // identical plumbing; one class serves both here.)
 //
-//   encoder: obs_dict[1,1762] -> encoded_tokens[1,64]
+//   encoder: obs_dict[1,1751] -> encoded_tokens[1,64]  (SONIC v1.1)
 //   decoder: obs_dict[1, 994] -> action[1,29]
 class ObsDictModel {
 public:

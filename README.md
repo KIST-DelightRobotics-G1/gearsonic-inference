@@ -122,8 +122,8 @@ CUDA 12.6 and TensorRT 10.7, per the NVIDIA guides:
 #### 8. Download Models
 
 ```bash
-wget -P models https://huggingface.co/nvidia/GEAR-SONIC/resolve/main/model_encoder.onnx
-wget -P models https://huggingface.co/nvidia/GEAR-SONIC/resolve/main/model_decoder.onnx
+wget -P models https://huggingface.co/nvidia/GEAR-SONIC/resolve/main/sonic_v1_1/model_encoder.onnx
+wget -P models https://huggingface.co/nvidia/GEAR-SONIC/resolve/main/sonic_v1_1/model_decoder.onnx
 wget -P models https://huggingface.co/nvidia/GEAR-SONIC/resolve/main/planner_sonic.onnx
 ```
 
