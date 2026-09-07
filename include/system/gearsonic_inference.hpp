@@ -59,6 +59,7 @@ private:
     bool vr_started_{false};
     bool robot_started_{false};
     bool vla_started_{false};
+    bool nav_rx_started_{false};
     bool planner_started_{false};
     bool writer_started_{false};
     bool hand_writer_started_{false};

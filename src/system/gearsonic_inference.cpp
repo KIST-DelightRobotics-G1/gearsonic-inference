@@ -4,6 +4,7 @@
 #include "collector/motion_token_publisher.hpp"
 #include "control/whole_body_controller.hpp"
 #include "motion/input_handler.hpp"
+#include "motion/nav_cmd_receiver.hpp"
 #include "pico/pico_vr_reader.hpp"
 #include "planner/planner_inference.hpp"
 #include "teleop/teleop_tracker.hpp"
@@ -59,6 +60,15 @@ bool GearsonicInference::start(const std::string& config_path) {
         return false;
     }
     vla_started_ = true;
+
+    // NAV command Rx: base-frame velocity (vx,vy,vyaw) from the navigation planner
+    // (kist-navigation-planner) -> InputHandler::nav_buf, on the same DDS factory.
+    // Pure intake; the stick-vs-nav arbitration lives in input_handler.
+    if (!NavCmdReceiver::instance().start()) {
+        stop();
+        return false;
+    }
+    nav_rx_started_ = true;
 
     std::cout << "[GearsonicInference] waiting for robot state...\n";
     while (!UnitreeStateReader::instance().unitree_state_buf.GetData()) {
@@ -141,6 +151,10 @@ void GearsonicInference::stop() {
     if (planner_started_) {
         PlannerInference::instance().stop();
         planner_started_ = false;
+    }
+    if (nav_rx_started_) {
+        NavCmdReceiver::instance().stop();
+        nav_rx_started_ = false;
     }
     if (vla_started_) {
         VlaTokenReceiver::instance().stop();
