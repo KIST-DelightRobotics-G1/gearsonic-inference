@@ -1,11 +1,15 @@
 #include "teleop/teleop_tracker.hpp"
 #include "common/math_utils.hpp"
 #include "control/control_arbiter.hpp"
+#include "motion/input_handler.hpp"
 #include "pico/pico_vr_reader.hpp"
 #include "teleop/g1_arm_fk.hpp"
+#include "teleop/smpl_fk.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <iostream>
 
 namespace kist {
@@ -67,6 +71,7 @@ void TeleopTracker::stop() {
     if (loop_thread_.joinable())
         loop_thread_.join();
     vr3point_buf.Clear();
+    smpl_window_buf.Clear();
 }
 
 // ─── loop ─────────────────────────────────────────────────────────────────────
@@ -82,10 +87,13 @@ void TeleopTracker::loop() {
             have_neck_calib_ = false;
             calibrated_      = false;
             vr3point_buf.Clear();
+            if (fullbody_engaged_)
+                disengage_fullbody("reset");
             std::cout << "[TeleopTracker] calibration reset\n";
         }
 
         check_calibration_gesture();
+        check_fullbody_gesture();
 
         auto body = PicoVRReader::instance().body_buf.GetDataWithTime();
         if (!body.HasData()) {
@@ -95,6 +103,15 @@ void TeleopTracker::loop() {
         } else if (body.timestamp != last_body_time_) {
             last_body_time_ = body.timestamp;
             process(*body.data);
+        }
+
+        // Full-body runs every tick on the latest sample (sample-and-hold),
+        // not per new sample: the window's frames must be 50Hz-spaced.
+        if (fullbody_engaged_) {
+            if (!body.HasData() || body.GetAgeMs() > kFullBodyStaleMs)
+                disengage_fullbody("body stream stale");
+            else
+                process_fullbody(*body.data);
         }
 
         std::this_thread::sleep_until(t0 + period);
@@ -116,7 +133,8 @@ void TeleopTracker::check_calibration_gesture() {
     // path always lands at the origin (see control_arbiter.hpp).
     auto arb_mode = ControlArbiter::instance().mode();
     if (arb_mode == ControlArbiter::Mode::kVla ||
-        arb_mode == ControlArbiter::Mode::kRecovering) {
+        arb_mode == ControlArbiter::Mode::kRecovering ||
+        fullbody_engaged_) {   // full-body owns teleop: B ignored until it lets go
         calib_hold_ticks_      = 0;
         calib_gesture_latched_ = false;
         return;
@@ -155,6 +173,104 @@ void TeleopTracker::check_calibration_gesture() {
                              "(enable body tracking on the headset)\n";
         }
     }
+}
+
+// A held 1s (alone among the face buttons, triggers released) toggles the
+// full-body flavor. Engages only from locomotion IDLE — the smpl encoder
+// mode has no lower-body command slot, so walking cannot coexist with it
+// (InputHandler's A tap has already dropped the mode to IDLE by the time
+// the hold latches) — and only while the upper-body flavor is off: the
+// flavors are exclusive, first engaged wins. Same VLA/recovery gate as B.
+void TeleopTracker::check_fullbody_gesture() {
+    auto arb_mode = ControlArbiter::instance().mode();
+    if (arb_mode == ControlArbiter::Mode::kVla ||
+        arb_mode == ControlArbiter::Mode::kRecovering ||
+        calibrated_) {   // upper-body owns teleop: A ignored until it lets go
+        fb_hold_ticks_      = 0;
+        fb_gesture_latched_ = false;
+        return;
+    }
+
+    auto ctrl = PicoVRReader::instance().ctrl_buf.GetData();
+    bool a_alone = ctrl && ctrl->btn_a &&
+                   !ctrl->btn_b && !ctrl->btn_x && !ctrl->btn_y;
+    bool held = a_alone &&
+                ctrl->left_trigger < kTriggerIdle &&
+                ctrl->right_trigger < kTriggerIdle;
+    if (!held) {
+        fb_hold_ticks_      = 0;
+        fb_gesture_latched_ = false;
+        return;
+    }
+    if (fb_gesture_latched_)
+        return;
+    if (++fb_hold_ticks_ >= kCalibHoldTicks) {
+        fb_gesture_latched_ = true;
+        if (fullbody_engaged_) {
+            disengage_fullbody("gesture (A 1s)");
+        } else if (InputHandler::instance().mode() != static_cast<int>(LocomotionMode::IDLE)) {
+            std::cout << "[TeleopTracker] gesture (A 1s) ignored: locomotion not IDLE\n";
+        } else if (!PicoVRReader::instance().body_buf.GetData()) {
+            std::cerr << "[TeleopTracker] gesture (A 1s) ignored: no body tracking data "
+                         "(enable body tracking on the headset)\n";
+        } else {
+            hist_count_       = 0;
+            arm_reach_        = ArmReachState{};
+            fullbody_engaged_ = true;
+            std::cout << "[TeleopTracker] gesture (A 1s): full-body teleop on (smpl)\n";
+        }
+    }
+}
+
+void TeleopTracker::disengage_fullbody(const char* why) {
+    fullbody_engaged_ = false;
+    hist_count_       = 0;
+    smpl_window_buf.Clear();
+    std::cout << "[TeleopTracker] full-body teleop off (" << why << ") -> g1\n";
+}
+
+// One SmplPose per tick into the delay line, then the window the encoder
+// reads: frame f is the sample kLookaheadTicks - f ticks old, clamped to
+// the newest (held) beyond it and to the oldest we have during warm-up.
+void TeleopTracker::process_fullbody(const PicoVRBodyPose& body) {
+    hist_head_ = (hist_count_ == 0) ? 0 : (hist_head_ + 1) % kHistory;
+    history_[hist_head_] = smpl_fk(body);
+    if (kFullBodyPositionArms)
+        smpl_arms_from_tracked_wrists(history_[hist_head_], body, arm_reach_);
+    if (hist_count_ < kHistory) ++hist_count_;
+
+    if (kFullBodyDebugLog && ++fb_debug_ticks_ >= 50) {
+        fb_debug_ticks_ = 0;
+        // SMPL-24: shoulders 16/17, elbows 18/19, wrists 20/21; the tracked
+        // stream's "wrist" keypoints are 22/23 (as the 3-point path uses).
+        const auto& jl = history_[hist_head_].joints_local;
+        auto dist = [](const std::array<double, 3>& a, const std::array<double, 3>& b) {
+            return std::sqrt((a[0]-b[0])*(a[0]-b[0]) + (a[1]-b[1])*(a[1]-b[1]) + (a[2]-b[2])*(a[2]-b[2]));
+        };
+        auto elbow_deg = [&](int s, int e, int w) {
+            std::array<double, 3> u = {jl[s][0]-jl[e][0], jl[s][1]-jl[e][1], jl[s][2]-jl[e][2]};
+            std::array<double, 3> v = {jl[w][0]-jl[e][0], jl[w][1]-jl[e][1], jl[w][2]-jl[e][2]};
+            double nu = std::sqrt(u[0]*u[0]+u[1]*u[1]+u[2]*u[2]), nv = std::sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
+            double c = (u[0]*v[0]+u[1]*v[1]+u[2]*v[2]) / std::max(nu*nv, 1e-9);
+            return std::acos(std::clamp(c, -1.0, 1.0)) * 180.0 / M_PI;
+        };
+        auto tracked = [&](int s, int w) {
+            const auto& a = body.joints[s]; const auto& b = body.joints[w];
+            return std::sqrt((a[0]-b[0])*(a[0]-b[0]) + (a[1]-b[1])*(a[1]-b[1]) + (a[2]-b[2])*(a[2]-b[2]));
+        };
+        std::printf("[TeleopTracker] smpl arms  L: elbow %5.1f deg, shoulder->wrist %.2fm (tracked %.2fm)"
+                    "   R: elbow %5.1f deg, %.2fm (tracked %.2fm)   [straight arm: ~180 deg, smpl ~0.51m]\n",
+                    elbow_deg(16, 18, 20), dist(jl[16], jl[20]), tracked(16, 22),
+                    elbow_deg(17, 19, 21), dist(jl[17], jl[21]), tracked(17, 23));
+    }
+
+    SmplPoseWindow w;
+    for (int f = 0; f < SmplPoseWindow::kFrames; ++f) {
+        int depth = kLookaheadTicks - f;           // ticks behind the newest
+        depth = std::max(0, std::min(depth, hist_count_ - 1));
+        w.frames[f] = history_[(hist_head_ - depth + kHistory) % kHistory];
+    }
+    smpl_window_buf.SetData(std::move(w));
 }
 
 void TeleopTracker::process(const PicoVRBodyPose& body) {

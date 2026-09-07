@@ -9,7 +9,7 @@
 //    1 x [w x y z]             anchor quat (expected)
 //    6 x wrist joint targets   q[23..28] (expected)
 //
-//   ./test_smpl_pose <vectors.txt> [joint_tol=5e-5] [quat_tol=1e-5] [wrist_tol=1e-4]
+//   ./build/test_smpl_pose [vectors.txt=test/data/smpl_vectors.txt] [joint_tol=5e-5] [quat_tol=1e-5] [wrist_tol=1e-4]
 //
 // Default tolerances allow for the reference running in float32 (as the
 // upstream teleop stack does): joints land ~5e-7 m off, anchor ~2e-7, and
@@ -52,16 +52,14 @@ double quat_dist(const std::array<double, 4>& a, const std::array<double, 4>& b)
 } // namespace
 
 int main(int argc, char** argv) {
-    if (argc < 2) {
-        std::fprintf(stderr, "usage: %s <vectors.txt> [joint_tol] [quat_tol] [wrist_tol]\n", argv[0]);
-        return 2;
-    }
+    // Default: the committed reference vectors (repo root as cwd).
+    const std::string path = argc > 1 ? argv[1] : "test/data/smpl_vectors.txt";
     const double joint_tol = argc > 2 ? std::atof(argv[2]) : 5e-5;
     const double quat_tol  = argc > 3 ? std::atof(argv[3]) : 1e-5;
     const double wrist_tol = argc > 4 ? std::atof(argv[4]) : 1e-4;
 
-    std::ifstream in(argv[1]);
-    if (!in) { std::fprintf(stderr, "cannot open %s\n", argv[1]); return 2; }
+    std::ifstream in(path);
+    if (!in) { std::fprintf(stderr, "cannot open %s\n", path.c_str()); return 2; }
 
     constexpr int kPerCase = 24 * 7 + 24 * 3 + 4 + 6;  // 250
     int cases = 0, failed = 0;

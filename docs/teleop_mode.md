@@ -35,6 +35,7 @@ Connect the headset from its XRoboToolkit app.
 | X | Mode down |
 | Undefined | Height up / down (crouch modes) |
 | B held 1s | Teleop on / off (engage in the reference pose: forearms 90° forward, palms inward) |
+| A held 1s | Full-body teleop on / off (from IDLE only; whole body followed, no locomotion; arms follow the tracked wrists) |
 | Left / right grip (analog) | Left / right Dex3-1 thumb close (0 = open, 1 = pressed against fingers) |
 | Left / right trigger (analog) | Left / right Dex3-1 index+middle close (0 = open, 1 = cage / fist) |
 | A + B + X + Y held 1s | Emergency stop |

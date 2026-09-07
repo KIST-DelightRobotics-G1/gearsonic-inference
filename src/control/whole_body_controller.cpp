@@ -291,8 +291,25 @@ void WholeBodyController::tick_control() {
         ControlArbiter::instance().arm_handoff();
     }
 
+    // Full-body target: the whole reference switches source (planner <->
+    // operator), so besides the token crossfade the heading alignment is
+    // re-anchored on the new reference root, and locomotion is dropped to
+    // IDLE on both edges — the smpl mode has no lower-body command, and a
+    // mode the operator armed mid-session must not start walking the moment
+    // the planner is back in charge.
+    auto smpl = TeleopTracker::instance().smpl_window_buf.GetData();
+    bool smpl_present = static_cast<bool>(smpl);
+    if (smpl_present != last_smpl_present_) {
+        last_smpl_present_ = smpl_present;
+        ControlArbiter::instance().arm_handoff();
+        encoder_.request_heading_reinit();
+        InputHandler::instance().disarm();
+        std::cout << "[WholeBodyController] full-body teleop "
+                  << (smpl_present ? "engaged (smpl mode)" : "released (planner resumes)") << "\n";
+    }
+
     TokenEncoder::Token token;
-    if (!encoder_.step(*motion, cursor, playing_, logger_, vr3.get(), token))
+    if (!encoder_.step(*motion, cursor, playing_, logger_, vr3.get(), smpl.get(), token))
         return;
     auto t1 = clock::now();
 
@@ -438,8 +455,9 @@ void WholeBodyController::update_arbiter() {
                          "planner paused, B ignored)\n";
             break;
         case Mode::kTeleop:
-            std::cout << "[WholeBodyController] -> TELEOP (VLA tokens ignored "
-                         "until teleop disengages)\n";
+            std::cout << "[WholeBodyController] -> TELEOP ("
+                      << (TeleopTracker::instance().fullbody() ? "full-body" : "upper-body")
+                      << "; VLA tokens ignored until teleop disengages)\n";
             break;
         case Mode::kRecovering:
             reinit_ticket_issued_ = false;
