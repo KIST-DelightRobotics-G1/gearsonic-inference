@@ -111,6 +111,12 @@ add_library(input_handler STATIC
 target_include_directories(input_handler PUBLIC include)
 target_link_libraries(input_handler PUBLIC pico_vr_reader)
 
+# ─── nav_cmd_receiver ────────────────────────────────────────────────────────
+# DDS Rx bridging the external navigation planner's Twist -> InputHandler::nav_buf.
+add_library(nav_cmd_receiver STATIC src/motion/nav_cmd_receiver.cpp)
+target_include_directories(nav_cmd_receiver PUBLIC include)
+target_link_libraries(nav_cmd_receiver PUBLIC unitree_sdk2 input_handler)
+
 # ─── teleop_tracker ──────────────────────────────────────────────────────────
 add_library(teleop_tracker STATIC
     src/teleop/teleop_tracker.cpp
@@ -141,7 +147,7 @@ add_library(gearsonic_inference STATIC
     src/system/gearsonic_inference.cpp
 )
 target_include_directories(gearsonic_inference PUBLIC include)
-target_link_libraries(gearsonic_inference PUBLIC control unitree_command_writer hand_command_writer motion_token_publisher yaml-cpp)
+target_link_libraries(gearsonic_inference PUBLIC control unitree_command_writer hand_command_writer motion_token_publisher nav_cmd_receiver yaml-cpp)
 set_target_properties(gearsonic_inference PROPERTIES CXX_STANDARD 20)
 
 # ─── main ─────────────────────────────────────────────────────────────────────
@@ -189,6 +195,9 @@ target_include_directories(test_arbiter_probe PRIVATE include)
 
 add_executable(vla_receiver_probe test/vla_receiver_probe.cpp)
 target_link_libraries(vla_receiver_probe PRIVATE vla_token_receiver)
+
+add_executable(nav_receiver_probe test/nav_receiver_probe.cpp)
+target_link_libraries(nav_receiver_probe PRIVATE nav_cmd_receiver)
 
 add_executable(motion_token_probe test/motion_token_probe.cpp)
 target_link_libraries(motion_token_probe PRIVATE motion_token_publisher)
