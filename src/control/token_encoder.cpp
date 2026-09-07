@@ -1,5 +1,6 @@
 #include "control/token_encoder.hpp"
 #include "common/math_utils.hpp"
+#include "teleop/smpl_skeleton.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -21,6 +22,12 @@ static constexpr size_t kOffLowerQ       = 650;  // teleop mode  (release: 661)
 static constexpr size_t kOffLowerDq      = 770;  //              (release: 781)
 static constexpr size_t kOffVR3Pos       = 890;  //              (release: 901)
 static constexpr size_t kOffVR3Orn       = 899;  //              (release: 910)
+static constexpr size_t kOffSmplJoints   = 911;  // smpl mode: 24*3 x 10 frames
+static constexpr size_t kOffSmplAnchor   = 1631; //            6 x 10 frames
+static constexpr size_t kOffSmplWrists   = 1691; //            6 x 10 frames
+static constexpr int    kSmplFrames      = SmplPoseWindow::kFrames;  // *_10frame_step1
+static_assert(kOffSmplWrists + kSmplFrames * 6 == TokenEncoder::kInputDim,
+              "smpl block must end exactly at the encoder input dim");
 
 static constexpr int kNumJoints  = MotionSequence50Hz::kNumJoints;
 static constexpr int kFutFrames  = 10;   // *_10frame_step5
@@ -48,16 +55,16 @@ bool TokenEncoder::init(const std::string& onnx_path) {
 
 bool TokenEncoder::step(const MotionSequence50Hz& motion, int cursor, bool playing,
                         const StateLogger& logger, const VR3Point* vr3point,
-                        Token& token_out) {
-    int mode = vr3point ? 1 : 0;
+                        const SmplPoseWindow* smpl, Token& token_out) {
+    int mode = smpl ? 2 : (vr3point ? 1 : 0);
     if (mode != last_mode_) {
-        std::cout << "[TokenEncoder] encoder mode -> "
-                  << (mode == 1 ? "teleop(1)" : "g1(0)") << "\n";
+        static const char* kNames[] = {"g1(0)", "teleop(1)", "smpl(2)"};
+        std::cout << "[TokenEncoder] encoder mode -> " << kNames[mode] << "\n";
         last_mode_ = mode;
     }
 
-    update_heading_state(motion, cursor, logger);
-    fill_obs(model_.input(), motion, cursor, playing, logger, vr3point);
+    update_heading_state(motion, cursor, logger, smpl);
+    fill_obs(model_.input(), motion, cursor, playing, logger, vr3point, smpl);
 
     if (!model_.Infer())
         return false;
@@ -68,19 +75,24 @@ bool TokenEncoder::step(const MotionSequence50Hz& motion, int cursor, bool playi
 
 void TokenEncoder::update_heading_state(const MotionSequence50Hz& motion,
                                         int cursor,
-                                        const StateLogger& logger) {
+                                        const StateLogger& logger,
+                                        const SmplPoseWindow* smpl) {
     if (motion.timesteps == 0)
         return;
 
     if (reinitialize_heading_) {
         init_base_quat_ = logger.GetLatest(1)[0].base_quat;
         delta_heading_  = 0.0;
-        init_ref_root_rot_ = motion.frames[std::clamp(cursor, 0, motion.timesteps - 1)].quaternion;
+        // smpl: the operator's root at engage is the reference the robot's
+        // heading is aligned to (the controller requests a reset on every
+        // full-body engage/disengage so the source switch is clean).
+        init_ref_root_rot_ = smpl ? smpl->frames[0].anchor_quat
+                                  : motion.frames[std::clamp(cursor, 0, motion.timesteps - 1)].quaternion;
         reinitialize_heading_ = false;
         std::cout << "[TokenEncoder] heading state reset\n";
     }
 
-    if (cursor == 0)
+    if (!smpl && cursor == 0)
         init_ref_root_rot_ = motion.frames[0].quaternion;
 }
 
@@ -93,19 +105,21 @@ std::array<double, 4> TokenEncoder::compute_apply_delta_heading() const {
     return apply;
 }
 
-// Anchor orientation for N future frames (orientation_mode 0: full robot
-// base quat as left side); 6 values per frame — first two rotation-matrix
-// columns, flattened row-wise.
-void TokenEncoder::fill_anchor_orientation(float* out, int num_frames, int step,
-                                           const MotionSequence50Hz& motion,
-                                           int cursor, bool playing,
+// Anchor orientation for N frames of reference root quats — upstream
+// orientation_mode 1 (the *_heading_* observations SONIC v1.1 is trained
+// on): the reference root, heading-aligned, expressed against the robot's
+// YAW only, so a lean or crouch of the robot base does not rotate the
+// reference. 6 values per frame — first two rotation-matrix columns,
+// flattened row-wise.
+void TokenEncoder::fill_anchor_orientation(float* out, const std::array<double, 4>* ref_roots,
+                                           int num_frames,
                                            const std::array<double, 4>& base_quat) const {
     auto apply_delta_heading = compute_apply_delta_heading();
+    auto base_heading_inv    = quat_conjugate(calc_heading_quat(base_quat));
 
     for (int f = 0; f < num_frames; ++f) {
-        int tf = target_frame(cursor, f, step, motion.timesteps, playing);
-        auto new_ref_root_rot = quat_mul(apply_delta_heading, motion.frames[tf].quaternion);
-        auto base_to_ref      = quat_mul(quat_conjugate(base_quat), new_ref_root_rot);
+        auto new_ref_root_rot = quat_mul(apply_delta_heading, ref_roots[f]);
+        auto base_to_ref      = quat_mul(base_heading_inv, new_ref_root_rot);
         auto m                = quat_to_rotation_matrix(base_to_ref);
 
         float* o = out + f * 6;
@@ -115,14 +129,46 @@ void TokenEncoder::fill_anchor_orientation(float* out, int num_frames, int step,
     }
 }
 
+// Same, sampling the reference roots off the playback (future frames from
+// the cursor; hold while not playing).
+void TokenEncoder::fill_anchor_orientation(float* out, int num_frames, int step,
+                                           const MotionSequence50Hz& motion,
+                                           int cursor, bool playing,
+                                           const std::array<double, 4>& base_quat) const {
+    std::array<std::array<double, 4>, kFutFrames> roots;
+    for (int f = 0; f < num_frames && f < kFutFrames; ++f)
+        roots[f] = motion.frames[target_frame(cursor, f, step, motion.timesteps, playing)].quaternion;
+    fill_anchor_orientation(out, roots.data(), std::min(num_frames, kFutFrames), base_quat);
+}
+
 void TokenEncoder::fill_obs(float* dst, const MotionSequence50Hz& motion,
                             int cursor, bool playing, const StateLogger& logger,
-                            const VR3Point* vr3point) const {
+                            const VR3Point* vr3point, const SmplPoseWindow* smpl) const {
     std::memset(dst, 0, kInputDim * sizeof(float));
     if (motion.timesteps == 0)
         return;
 
     auto base_quat = logger.GetLatest(1)[0].base_quat;
+
+    if (smpl) {
+        // ── smpl (2): the operator's whole body, ten 50Hz frames ──
+        // No planner input at all — the window is the full reference.
+        dst[kOffEncoderMode] = 2.0f;
+
+        std::array<std::array<double, 4>, kSmplFrames> roots;
+        for (int f = 0; f < kSmplFrames; ++f) {
+            const SmplPose& p = smpl->frames[f];
+            float* jd = dst + kOffSmplJoints + f * (kSmplNumJoints * 3);
+            for (int j = 0; j < kSmplNumJoints; ++j)
+                for (int c = 0; c < 3; ++c)
+                    jd[j * 3 + c] = static_cast<float>(p.joints_local[j][c]);
+            for (int i = 0; i < 6; ++i)
+                dst[kOffSmplWrists + f * 6 + i] = static_cast<float>(p.wrist_joint_pos[i]);
+            roots[f] = p.anchor_quat;
+        }
+        fill_anchor_orientation(dst + kOffSmplAnchor, roots.data(), kSmplFrames, base_quat);
+        return;
+    }
 
     if (!vr3point) {
         // ── g1 (0): planner motion drives the whole body ──────────

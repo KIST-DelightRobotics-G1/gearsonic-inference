@@ -117,7 +117,13 @@ add_library(teleop_tracker STATIC
     src/teleop/g1_arm_fk.cpp
 )
 target_include_directories(teleop_tracker PUBLIC include)
-target_link_libraries(teleop_tracker PUBLIC pico_vr_reader)
+target_link_libraries(teleop_tracker PUBLIC pico_vr_reader smpl_fk input_handler)
+
+# ─── smpl_fk ─────────────────────────────────────────────────────────────────
+# Pure math: PicoVRBodyPose -> SmplPose for the encoder's smpl mode.
+# No robot/VR deps so test_smpl_pose can check it against recorded vectors.
+add_library(smpl_fk STATIC src/teleop/smpl_fk.cpp src/teleop/smpl_arm_reach.cpp)
+target_include_directories(smpl_fk PUBLIC include)
 
 # ─── control ─────────────────────────────────────────────────────────────────
 add_library(control STATIC
@@ -195,5 +201,14 @@ target_link_libraries(test_nav_command PRIVATE input_handler)
 
 add_executable(test_hand_command_writer test/test_hand_command_writer.cpp)
 target_link_libraries(test_hand_command_writer PRIVATE hand_command_writer)
+
+# Gate A: smpl_pose vs gear_sonic Python vectors (test/gen_smpl_vectors.py)
+add_executable(test_smpl_pose test/test_smpl_pose.cpp)
+target_link_libraries(test_smpl_pose PRIVATE smpl_fk)
+
+# smpl encoder mode — slot perturbation scan (optional offline check)
+add_executable(test_smpl_encoder_probe test/test_smpl_encoder_probe.cpp)
+target_link_libraries(test_smpl_encoder_probe PRIVATE control)
+set_target_properties(test_smpl_encoder_probe PROPERTIES CXX_STANDARD 20)
 
 add_executable(test_input_combo test/test_input_combo.cpp)

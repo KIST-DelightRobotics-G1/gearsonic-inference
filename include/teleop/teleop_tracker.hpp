@@ -2,6 +2,8 @@
 
 #include "common/data_buffer.hpp"
 #include "pico/pico_vr_body_pose.hpp"
+#include "teleop/smpl_arm_reach.hpp"
+#include "teleop/smpl_pose_window.hpp"
 #include "teleop/vr_3point.hpp"
 
 #include <array>
@@ -30,6 +32,15 @@ namespace kist {
 // dropout does NOT clear it: the reader holds the last body sample, so the
 // last teleop target stays published and the arms freeze in place until
 // the stream resumes.
+//
+// Full-body flavor (A held 1s, from IDLE): the whole 24-joint body goes
+// through smpl_fk and ten 50Hz frames are published as an SmplPoseWindow
+// (encoder smpl mode, 2). The two flavors are exclusive — whichever engages
+// first owns teleop, the other gesture is ignored until it lets go — and
+// either counts as "teleop engaged" for the arbiter (calibrated()). Unlike
+// the upper-body flavor, a body-stream dropout here DISENGAGES after
+// kFullBodyStaleMs: the legs are referenced too, so freezing mid-step is
+// not a safe hold — the arbiter then returns the robot to the origin.
 class TeleopTracker {
 public:
     static TeleopTracker& instance();
@@ -48,7 +59,10 @@ public:
     // toggling off and on, and nothing stale survives a cycle.
     void request_calibration() { calibrate_request_ = true; }
     void reset_calibration()   { reset_request_ = true; }
-    bool calibrated() const    { return calibrated_; }
+    // Teleop engaged — either flavor. This is the arbiter's "operator holds
+    // the robot" input; full-body and upper-body both claim through it.
+    bool calibrated() const    { return calibrated_ || fullbody_engaged_; }
+    bool fullbody() const      { return fullbody_engaged_; }
 
     // OPT-IN: measured robot joints (MuJoCo/DDS order) as the wrist
     // calibration reference (gear_sonic recalibrate_for_vr3pt) — maps the
@@ -61,7 +75,8 @@ public:
     void set_measured_q_provider(MeasuredQProvider p) { measured_q_provider_ = std::move(p); }
 
     // ── output ──────────────────────────────────────────────────
-    DataBuffer<VR3Point> vr3point_buf;
+    DataBuffer<VR3Point>       vr3point_buf;     // upper-body flavor (mode 1)
+    DataBuffer<SmplPoseWindow> smpl_window_buf;  // full-body flavor  (mode 2)
 
 private:
     TeleopTracker() = default;
@@ -69,6 +84,11 @@ private:
     void loop();
     void check_calibration_gesture();
     void process(const PicoVRBodyPose& body);
+
+    // full-body flavor
+    void check_fullbody_gesture();
+    void process_fullbody(const PicoVRBodyPose& body);
+    void disengage_fullbody(const char* why);
 
     // raw 3-point [L, R, neck], root-relative (before calibration)
     struct Raw3Point {
@@ -94,6 +114,28 @@ private:
     int  calib_hold_ticks_{0};
     bool calib_gesture_latched_{false};
 
+    // A-held full-body gesture + delay line (tracker thread only). The
+    // encoder wants ten frames "ahead of the cursor"; live tracking has
+    // none, so the policy tracks the operator kLookaheadTicks late and the
+    // newest sample is held into the remaining slots (the window gear_sonic's
+    // streamed-motion merger yields in steady state).
+    int  fb_hold_ticks_{0};
+    bool fb_gesture_latched_{false};
+    static constexpr int kHistory = 16;
+    std::array<SmplPose, kHistory> history_{};
+    int hist_count_{0};
+    int hist_head_{0};   // index of the newest frame
+    std::atomic<bool> fullbody_engaged_{false};
+    // Bring-up telemetry (1 Hz while engaged): SMPL-FK arm extension vs the
+    // tracked wrist distance, to tell "the operator's arm rotations don't
+    // encode the extension" from a mapping bug. Turn off once settled.
+    static constexpr bool kFullBodyDebugLog = false;
+    int fb_debug_ticks_{0};
+    // Arms from tracked wrist positions instead of the headset's arm-joint
+    // rotations (see smpl_arm_reach.hpp). Reach estimate resets on engage.
+    static constexpr bool kFullBodyPositionArms = true;
+    ArmReachState arm_reach_{};
+
     std::atomic<bool> calibrated_{false};
     std::atomic<bool> calibrate_request_{false};
     std::atomic<bool> reset_request_{false};
@@ -104,6 +146,11 @@ private:
     static constexpr double kLoopDt = 0.02;  // 50Hz, original POSE loop rate
     static constexpr double kTriggerIdle    = 0.5;  // gesture needs triggers released
     static constexpr int    kCalibHoldTicks = 50;   // 1s at 50Hz
+    // Full-body: frames the policy lags the operator (latency knob, ticks;
+    // upstream steady state is about one 5-frame chunk) and the body-stream
+    // age past which the flavor disengages instead of freezing the legs.
+    static constexpr int    kLookaheadTicks  = 5;
+    static constexpr double kFullBodyStaleMs = 500.0;
 };
 
 } // namespace kist

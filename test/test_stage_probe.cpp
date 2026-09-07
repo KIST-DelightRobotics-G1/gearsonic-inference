@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
 
     // ── encoder stage, g1 mode (no VR 3-point) ──
     TokenEncoder::Token token;
-    if (!encoder.step(motion, kCursor, /*playing=*/true, logger, nullptr, token))
+    if (!encoder.step(motion, kCursor, /*playing=*/true, logger, nullptr, nullptr, token))
         return 1;
 
     std::printf("token   :");
@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
     }
 
     TokenEncoder::Token token1;
-    if (!encoder.step(motion, kCursor, /*playing=*/true, logger, &vr3, token1))
+    if (!encoder.step(motion, kCursor, /*playing=*/true, logger, &vr3, nullptr, token1))
         return 1;
 
     std::printf("token1  :");

@@ -29,6 +29,7 @@ public:
     bool Infer();
 
     float*       input()  { return input_buf_.data(); }
+    const float* input() const { return input_buf_.data(); }
     const float* output() const { return output_buf_.data(); }
     size_t       input_dim()  const { return input_buf_.size(); }
     size_t       output_dim() const { return output_buf_.size(); }
