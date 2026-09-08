@@ -65,6 +65,13 @@ add_library(unitree_state_reader STATIC
 target_include_directories(unitree_state_reader PUBLIC include)
 target_link_libraries(unitree_state_reader PUBLIC unitree_sdk2)
 
+# ─── hand_state_reader (Dex3-1 feedback) ─────────────────────────────────────
+add_library(hand_state_reader STATIC
+    src/unitree/hand_state_reader.cpp
+)
+target_include_directories(hand_state_reader PUBLIC include)
+target_link_libraries(hand_state_reader PUBLIC unitree_sdk2)
+
 # ─── unitree_command_writer ──────────────────────────────────────────────────
 add_library(unitree_command_writer STATIC
     src/unitree/unitree_command_writer.cpp
@@ -77,7 +84,7 @@ add_library(hand_command_writer STATIC
     src/unitree/hand_command_writer.cpp
 )
 target_include_directories(hand_command_writer PUBLIC include)
-target_link_libraries(hand_command_writer PUBLIC unitree_sdk2 pico_vr_reader input_handler vla_token_receiver)
+target_link_libraries(hand_command_writer PUBLIC unitree_sdk2 hand_state_reader pico_vr_reader input_handler vla_token_receiver)
 
 # ─── tensorrt_inference ──────────────────────────────────────────────────────
 add_library(tensorrt_inference STATIC
@@ -147,7 +154,7 @@ add_library(gearsonic_inference STATIC
     src/system/gearsonic_inference.cpp
 )
 target_include_directories(gearsonic_inference PUBLIC include)
-target_link_libraries(gearsonic_inference PUBLIC control unitree_command_writer hand_command_writer motion_token_publisher nav_cmd_receiver yaml-cpp)
+target_link_libraries(gearsonic_inference PUBLIC control unitree_command_writer hand_state_reader hand_command_writer motion_token_publisher nav_cmd_receiver yaml-cpp)
 set_target_properties(gearsonic_inference PROPERTIES CXX_STANDARD 20)
 
 # ─── main ─────────────────────────────────────────────────────────────────────
@@ -210,6 +217,10 @@ target_link_libraries(test_nav_command PRIVATE input_handler)
 
 add_executable(test_hand_command_writer test/test_hand_command_writer.cpp)
 target_link_libraries(test_hand_command_writer PRIVATE hand_command_writer)
+
+# header-only guard stage — no link dependencies
+add_executable(test_hand_guard_probe test/test_hand_guard_probe.cpp)
+target_include_directories(test_hand_guard_probe PRIVATE include)
 
 # Gate A: smpl_pose vs gear_sonic Python vectors (test/gen_smpl_vectors.py)
 add_executable(test_smpl_pose test/test_smpl_pose.cpp)

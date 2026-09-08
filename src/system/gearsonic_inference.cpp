@@ -9,6 +9,7 @@
 #include "planner/planner_inference.hpp"
 #include "teleop/teleop_tracker.hpp"
 #include "unitree/hand_command_writer.hpp"
+#include "unitree/hand_state_reader.hpp"
 #include "unitree/unitree_command_writer.hpp"
 #include "unitree/unitree_state_reader.hpp"
 #include "vla/vla_token_receiver.hpp"
@@ -18,8 +19,30 @@
 #include <exception>
 #include <iostream>
 #include <thread>
+#include <type_traits>
 
 namespace kist {
+
+// config.yaml `hand:` section — every key optional, defaults in HandGuard::Params.
+static HandGuard::Params parse_hand_guard(const YAML::Node& hand) {
+    HandGuard::Params p;
+    if (!hand) return p;
+    auto get = [&](const char* key, auto& dst) {
+        if (hand[key]) dst = hand[key].as<std::decay_t<decltype(dst)>>();
+    };
+    get("guard_enabled",  p.enabled);
+    get("kp",             p.kp);
+    get("kd",             p.kd);
+    get("tau_max",        p.tau_max);
+    get("stall_err_th",   p.stall_err_th);
+    get("stall_vel_th",   p.stall_vel_th);
+    get("stall_time_s",   p.stall_time_s);
+    get("stall_offset",   p.stall_offset);
+    get("kp_hold",        p.kp_hold);
+    get("temp_max_c",     p.temp_max_c);
+    get("state_stale_ms", p.state_stale_ms);
+    return p;
+}
 
 GearsonicInference& GearsonicInference::instance() {
     static GearsonicInference inst;
@@ -51,6 +74,15 @@ bool GearsonicInference::start(const std::string& config_path) {
         return false;
     }
     robot_started_ = true;
+
+    // Dex3-1 feedback rides the same DDS factory. Pure intake: nothing
+    // waits on it, so a robot without hands still comes up — the hand
+    // writer just never sees state and stays open-loop.
+    if (!HandStateReader::instance().start()) {
+        stop();
+        return false;
+    }
+    hand_state_started_ = true;
 
     // VLA latent-action Rx rides the DDS factory UnitreeStateReader just
     // initialized. Pure intake — nothing moves until tokens arrive AND the
@@ -101,7 +133,7 @@ bool GearsonicInference::start(const std::string& config_path) {
 
     // Dex3-1 hands ride the same DDS factory; the trigger stream drives them
     // orthogonally to the WBC policy (policy outputs 29 arm/leg joints only).
-    if (!HandCommandWriter::instance().start()) {
+    if (!HandCommandWriter::instance().start(parse_hand_guard(root["hand"]))) {
         stop();
         return false;
     }
@@ -147,6 +179,10 @@ void GearsonicInference::stop() {
     if (writer_started_) {
         UnitreeCommandWriter::instance().stop();
         writer_started_ = false;
+    }
+    if (hand_state_started_) {
+        HandStateReader::instance().stop();
+        hand_state_started_ = false;
     }
     if (planner_started_) {
         PlannerInference::instance().stop();

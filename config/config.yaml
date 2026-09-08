@@ -23,3 +23,23 @@ control:
   encoder_path: models/model_encoder.onnx
   # Decoder (policy): observation [994] -> joint action [29]
   decoder_path: models/model_decoder.onnx
+
+hand:
+  # Dex3-1 feedback guard (hand_guard.hpp). All keys optional.
+  guard_enabled: true
+  # PD gains while hand state is fresh
+  kp: 1.5
+  kd: 0.1
+  # stall torque bound -> e_max = tau_max / kp (rad)
+  tau_max: 0.6
+  # stall latch: |q_des - q_meas| > err_th and |dq| < vel_th for time_s
+  stall_err_th: 0.15
+  stall_vel_th: 0.05
+  stall_time_s: 0.3
+  # while latched: q_cmd = q_meas + offset toward target, with kp_hold
+  stall_offset: 0.05
+  kp_hold: 1.5
+  # motor temperature (°C) that latches immediately; 0 = off
+  temp_max_c: 0
+  # hand state older than this -> open-loop pass-through
+  state_stale_ms: 100

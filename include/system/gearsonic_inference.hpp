@@ -11,7 +11,7 @@ namespace kist {
 //
 //   GearsonicInference::instance().start("config/config.yaml");
 //     -> PicoVRReader -> InputHandler -> TeleopTracker
-//        -> UnitreeStateReader (waits for robot state) -> VlaTokenReceiver
+//        -> UnitreeStateReader -> HandStateReader (waits for robot state) -> VlaTokenReceiver
 //        -> PlannerInference (+ playback provider wiring)
 //        -> UnitreeCommandWriter -> HandCommandWriter
 //        -> MotionTokenPublisher -> WholeBodyController
@@ -58,6 +58,7 @@ private:
     // Which stages came up, so stop()/rollback only touches what runs.
     bool vr_started_{false};
     bool robot_started_{false};
+    bool hand_state_started_{false};
     bool vla_started_{false};
     bool nav_rx_started_{false};
     bool planner_started_{false};
