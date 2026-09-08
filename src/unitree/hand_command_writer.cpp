@@ -10,6 +10,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <cstdlib>
+#include <fstream>
 #include <iostream>
 
 namespace kist {
@@ -156,6 +159,15 @@ void HandCommandWriter::publish(const HandCommand& left, const HandCommand& righ
 void HandCommandWriter::loop() {
     using clock = std::chrono::steady_clock;
 
+    // KIST_HAND_LOG=<path> 로 켜면 매 주기 버튼 원시값+명령 q를 CSV로 기록.
+    // (버튼값은 DDS에 발행되지 않아 여기서만 관측 가능 — 기록 요청 대응)
+    std::ofstream btn_log;
+    if (const char* lp = std::getenv("KIST_HAND_LOG")) {
+        btn_log.open(lp, std::ios::app);
+        btn_log << "t_wall_ns,src,left_grip,left_trigger,right_grip,right_trigger"
+                   ",lq0,lq1,lq2,lq3,lq4,lq5,lq6,rq0,rq1,rq2,rq3,rq4,rq5,rq6\n";
+    }
+
     bool was_calibrated = false;
     clock::time_point calibrated_at{};
 
@@ -169,6 +181,9 @@ void HandCommandWriter::loop() {
         bool hold_fist = !calibrated || (t0 - calibrated_at) < kFistReleaseDelay;
 
         HandCommand left, right;
+        // 이 주기의 명령을 결정한 버튼값 (버튼이 관여하지 않은 분기는 NaN)
+        double lg = NAN, lt = NAN, rg = NAN, rt = NAN;
+        const char* cmd_src = "estop";
         auto arb_mode = ControlArbiter::instance().mode();
         if (InputHandler::instance().estop()) {
             left = right = stop_command();
@@ -185,22 +200,38 @@ void HandCommandWriter::loop() {
             // this branch never fires.
             left  = from_vla_joints(vla.data->left_hand,  /*is_left=*/true);
             right = from_vla_joints(vla.data->right_hand, /*is_left=*/false);
+            cmd_src = "vla";
         } else if (hold_fist) {
             // Before teleop calibration the operator isn't teleoperating
             // the hands, so hold a closed fist (the safe carry posture)
             // instead of tracking axes that are not deliberate input yet.
             left  = from_grip_and_trigger(1.0, 1.0, /*is_left=*/true);
             right = from_grip_and_trigger(1.0, 1.0, /*is_left=*/false);
+            lg = lt = rg = rt = 1.0; cmd_src = "hold_fist";
         } else if (auto ctrl = PicoVRReader::instance().ctrl_buf.GetData()) {
             left  = from_grip_and_trigger(ctrl->left_grip,  ctrl->left_trigger,  /*is_left=*/true);
             right = from_grip_and_trigger(ctrl->right_grip, ctrl->right_trigger, /*is_left=*/false);
+            lg = ctrl->left_grip;  lt = ctrl->left_trigger;
+            rg = ctrl->right_grip; rt = ctrl->right_trigger;
+            cmd_src = "vr";
         } else {
             // VR link lost: hold the open pose (all inputs=0), low PD.
             left  = from_grip_and_trigger(0.0, 0.0, /*is_left=*/true);
             right = from_grip_and_trigger(0.0, 0.0, /*is_left=*/false);
+            lg = lt = rg = rt = 0.0; cmd_src = "vr_lost";
         }
 
         publish(left, right);
+
+        if (btn_log.is_open()) {
+            auto wall_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            btn_log << wall_ns << ',' << cmd_src
+                    << ',' << lg << ',' << lt << ',' << rg << ',' << rt;
+            for (int i = 0; i < kMotorCount; ++i) btn_log << ',' << left.q[i];
+            for (int i = 0; i < kMotorCount; ++i) btn_log << ',' << right.q[i];
+            btn_log << '\n';
+        }
         std::this_thread::sleep_until(t0 + kPublishPeriod);
     }
 }
