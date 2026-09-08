@@ -1,4 +1,5 @@
 #include "unitree/hand_command_writer.hpp"
+#include "unitree/hand_state_reader.hpp"
 
 #include "common/thread_priority.hpp"
 #include "motion/input_handler.hpp"
@@ -61,13 +62,6 @@ static HandCommand from_grip_and_trigger(double grip, double trigger, bool is_le
     return cmd;
 }
 
-// URDF joint limits from the SDK dex3 example (the reference table in
-// hand_command.hpp) — VLA joint targets are clamped into them.
-static constexpr std::array<float, 7> kDex3LeftMin  = {-1.05f, -0.724f,  0.00f, -1.57f, -1.75f, -1.57f, -1.75f};
-static constexpr std::array<float, 7> kDex3LeftMax  = { 1.05f,  1.05f,   1.75f,  0.00f,  0.00f,  0.00f,  0.00f};
-static constexpr std::array<float, 7> kDex3RightMin = {-1.05f, -1.05f,  -1.75f,  0.00f,  0.00f,  0.00f,  0.00f};
-static constexpr std::array<float, 7> kDex3RightMax = { 1.05f,  0.742f,  0.00f,  1.57f,  1.75f,  1.57f,  1.75f};
-
 // External VLA hand targets: already Dex3 motor order (thumb x3, index x2,
 // middle x2), absolute joint positions — clamp and publish with the same
 // PD gains as trigger tracking.
@@ -100,7 +94,9 @@ HandCommandWriter& HandCommandWriter::instance() {
     return inst;
 }
 
-bool HandCommandWriter::start() {
+bool HandCommandWriter::start(const HandGuard::Params& guard) {
+    left_guard_.configure(/*is_left=*/true,  guard);
+    right_guard_.configure(/*is_left=*/false, guard);
     // ChannelFactory must already be initialized by UnitreeStateReader::start().
     left_pub_  = std::make_shared<unitree::robot::ChannelPublisher<SdkHandCmd>>(kLeftCmdTopic);
     right_pub_ = std::make_shared<unitree::robot::ChannelPublisher<SdkHandCmd>>(kRightCmdTopic);
@@ -112,6 +108,12 @@ bool HandCommandWriter::start() {
     try_realtime_priority(loop_thread_, 50, "HandCommandWriter");
     std::cout << "[HandCommandWriter] started (100 Hz, publishing to " << kLeftCmdTopic
               << " and " << kRightCmdTopic << ")\n";
+    std::cout << "[HandCommandWriter] guard " << (guard.enabled ? "on" : "off")
+              << " kp=" << guard.kp << " kd=" << guard.kd << " tau_max=" << guard.tau_max
+              << " (e_max=" << guard.tau_max / guard.kp << " rad)"
+              << " stall: err>" << guard.stall_err_th << " vel<" << guard.stall_vel_th
+              << " for " << guard.stall_time_s << "s -> offset " << guard.stall_offset
+              << " kp_hold=" << guard.kp_hold << "\n";
     return true;
 }
 
@@ -198,6 +200,20 @@ void HandCommandWriter::loop() {
             // VR link lost: hold the open pose (all inputs=0), low PD.
             left  = from_grip_and_trigger(0.0, 0.0, /*is_left=*/true);
             right = from_grip_and_trigger(0.0, 0.0, /*is_left=*/false);
+        }
+
+        // Feedback stage: bound the stall torque against the measured
+        // finger positions when the hand state stream is fresh.
+        if (left.enabled || right.enabled) {
+            const double dt_s   = std::chrono::duration<double>(kPublishPeriod).count();
+            const double stale  = left_guard_.params().state_stale_ms;
+            auto& reader = HandStateReader::instance();
+            auto ls = reader.left_buf.GetDataWithTime();
+            auto rs = reader.right_buf.GetDataWithTime();
+            const HandState* lm = (ls.HasData() && ls.GetAgeMs() < stale) ? ls.data.get() : nullptr;
+            const HandState* rm = (rs.HasData() && rs.GetAgeMs() < stale) ? rs.data.get() : nullptr;
+            left  = left_guard_.apply(left,  lm, dt_s);
+            right = right_guard_.apply(right, rm, dt_s);
         }
 
         publish(left, right);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "unitree/hand_command.hpp"
+#include "unitree/hand_guard.hpp"
 
 #include <unitree/robot/channel/channel_publisher.hpp>
 #include <unitree/idl/hg/HandCmd_.hpp>
@@ -31,6 +32,10 @@ namespace kist {
 // after calibration (the fist doesn't pop open the instant the gesture
 // lands).
 //
+// Every non-stop command then passes HandGuard (hand_guard.hpp) with the
+// matching HandStateReader buffer: stall-torque bound and stall latch when
+// measurements are fresh, pass-through otherwise.
+//
 // SAFETY:
 //  - InputHandler::estop() latched -> writer publishes stop mode
 //    (kp=0, kd=0, timeout bit) every tick.
@@ -39,7 +44,7 @@ namespace kist {
 class HandCommandWriter {
 public:
     static HandCommandWriter& instance();
-    bool start();
+    bool start(const HandGuard::Params& guard = HandGuard::Params{});
     void stop();
 
     // Immediately publish a stop command to both hands (safe shutdown).
@@ -55,6 +60,9 @@ private:
     using SdkHandCmd = unitree_hg::msg::dds_::HandCmd_;
     unitree::robot::ChannelPublisherPtr<SdkHandCmd> left_pub_;
     unitree::robot::ChannelPublisherPtr<SdkHandCmd> right_pub_;
+
+    HandGuard         left_guard_;
+    HandGuard         right_guard_;
 
     std::thread       loop_thread_;
     std::atomic<bool> stop_{false};

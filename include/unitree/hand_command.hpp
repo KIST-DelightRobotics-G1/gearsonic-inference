@@ -49,4 +49,11 @@ inline constexpr std::array<float, 7> kDex3LeftClose = { 0.00f,  1.05f,   1.75f,
 inline constexpr std::array<float, 7> kDex3RightOpen  = { 0.00f,  0.742f,  0.00f,  0.00f,  0.00f,  0.00f,  0.00f};
 inline constexpr std::array<float, 7> kDex3RightClose = { 0.00f, -1.05f,  -1.75f,  1.57f,  1.75f,  1.57f,  1.75f};
 
+// URDF joint limits (the table above), used to clamp external/derived
+// targets before publishing.
+inline constexpr std::array<float, 7> kDex3LeftMin  = {-1.05f, -0.724f,  0.00f, -1.57f, -1.75f, -1.57f, -1.75f};
+inline constexpr std::array<float, 7> kDex3LeftMax  = { 1.05f,  1.05f,   1.75f,  0.00f,  0.00f,  0.00f,  0.00f};
+inline constexpr std::array<float, 7> kDex3RightMin = {-1.05f, -1.05f,  -1.75f,  0.00f,  0.00f,  0.00f,  0.00f};
+inline constexpr std::array<float, 7> kDex3RightMax = { 1.05f,  0.742f,  0.00f,  1.57f,  1.75f,  1.57f,  1.75f};
+
 } // namespace kist
