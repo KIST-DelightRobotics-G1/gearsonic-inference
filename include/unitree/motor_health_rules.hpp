@@ -26,12 +26,14 @@ namespace kist {
 //  - FAULT        : SDK motorstate word != 0 (the flags the Unitree app
 //                   shows, e.g. under-voltage). Raw hex is logged.
 //  - TEMPERATURE  : two sensors per motor, judged separately — casing
-//                   (temperature[0]) and winding (temperature[1]). The SDK
-//                   cuts the robot out at casing 85C / winding 120C
-//                   (unitree/robot/g1/common/terminations.hpp). WARNING is
-//                   raised at 85% of that (72 / 102) so a person sees the
-//                   trend, EMERGENCY at 95% (80 / 114) so it is declared
-//                   before the cut-out, not at it. Clears 5C below warn.
+//                   (temperature[0]) and winding (temperature[1]). The
+//                   firmware cut-out was measured on the real G1 (2026-09-11):
+//                   winding 130C -> fault word 0x200 on that motor, then the
+//                   whole robot lost torque. (The SDK's terminations.hpp 120C
+//                   is only a user-side recommendation.) WARNING at 85% of
+//                   the cut-out (110C), EMERGENCY at 90% (117C). Casing has
+//                   not been driven to its cut-out; 85C from the SDK header
+//                   is kept as its reference (72 / 76). Clears 5C below warn.
 //  - NOT RESPONDING: the motor is not producing the torque its command
 //                   asks for. The policy uses the firmware PD as a torque
 //                   generator — a standing robot holds ankle/hip targets
@@ -50,16 +52,16 @@ class MotorHealthRules {
 public:
     struct Params {
         bool   enabled{true};
-        int    casing_warn_c{72};       // 85% of the SDK cut-out 85 (motor_casing_overheat)
-        int    casing_critical_c{80};   // 95% of the SDK cut-out 85
-        int    winding_warn_c{102};     // 85% of the SDK cut-out 120 (motor_winding_overheat)
-        int    winding_critical_c{114}; // 95% of the SDK cut-out 120
+        int    casing_warn_c{72};       // 85% of the SDK reference 85 (cut-out not measured)
+        int    casing_critical_c{76};   // 90% of 85
+        int    winding_warn_c{110};     // 85% of the measured cut-out 130
+        int    winding_critical_c{117}; // 90% of 130
         float  unresp_tau_min{5.0f};      // Nm the command must ask for
         float  unresp_tau_ratio{0.3f};    // measured/expected below this = not producing
         float  unresp_time_s{1.0f};
         float  frozen_time_s{1.0f};
         float  frozen_cmd_move{0.02f};    // rad the command must travel
-        float  summary_period_s{30.0f};   // 0 = no periodic summary
+        float  summary_period_s{0.0f};    // periodic hottest/faults line; 0 = off (default)
     };
 
     MotorHealthRules() = default;
@@ -142,8 +144,8 @@ private:
         else if (temp < warn - 5)      next = 0;
         if (next == level) return level;
         if (next == 2)
-            out.push_back(fmt("[MotorHealth] EMERGENCY %s: %s temperature %dC >= %dC — within 5%% of the SDK cut-out; "
-                              "the robot will shut this motor down on its own very soon", who, sensor, temp, critical));
+            out.push_back(fmt("[MotorHealth] EMERGENCY %s: %s temperature %dC >= %dC — 10%% under the firmware cut-out; "
+                              "at the cut-out this motor faults and the WHOLE robot loses torque", who, sensor, temp, critical));
         else if (next == 1)
             out.push_back(fmt("[MotorHealth] WARNING %s: %s temperature %dC >= %dC — running hot, watch the trend",
                               who, sensor, temp, warn));
@@ -177,8 +179,9 @@ private:
         if (cmd) {
             double expected = cmd->kp[i] * (cmd->q_target[i] - m.q) + cmd->kd[i] * (cmd->dq_target[i] - m.dq)
                             + cmd->tau_ff[i];
-            bool cond = std::fabs(expected) > p_.unresp_tau_min &&
-                        std::fabs(m.tau) < p_.unresp_tau_ratio * std::fabs(expected);
+            bool asked     = std::fabs(expected) > p_.unresp_tau_min;
+            bool cond      = asked && std::fabs(m.tau) <  p_.unresp_tau_ratio * std::fabs(expected);
+            bool confirmed = asked && std::fabs(m.tau) >= p_.unresp_tau_ratio * std::fabs(expected);
             t.unresp_s = cond ? t.unresp_s + static_cast<float>(dt_s) : 0.0f;
             if (!t.unresp && t.unresp_s >= p_.unresp_time_s) {
                 t.unresp = true;
@@ -187,7 +190,9 @@ private:
                                   "The motor is not producing torque: dead driver or power loss.",
                                   who.c_str(), expected, cmd->kp[i], cmd->q_target[i], m.q, m.dq, m.tau,
                                   p_.unresp_time_s));
-            } else if (t.unresp && !cond) {
+            } else if (t.unresp && confirmed) {
+                // Clear only when torque is actually seen again — a request
+                // that merely drops below tau_min proves nothing.
                 t.unresp = false;
                 out.push_back(fmt("[MotorHealth] %s: producing torque again (tau_est %.1f Nm of %.1f expected)",
                                   who.c_str(), m.tau, expected));

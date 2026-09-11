@@ -77,23 +77,23 @@ int main() {
         check("casing: WARNING at 72", has(out, "WARNING motor 3 left_knee: casing temperature 72C"));
         s.motors[3].temp_casing = 86;
         out = r.step(&s, &cmd, nullptr, nullptr, dt);
-        check("casing: EMERGENCY at 86", has(out, "EMERGENCY motor 3 left_knee: casing temperature 86C >= 80C"));
+        check("casing: EMERGENCY at 86", has(out, "EMERGENCY motor 3 left_knee: casing temperature 86C >= 76C"));
         s.motors[3].temp_casing = 67;  // above warn-5 -> stays flagged
         out = r.step(&s, &cmd, nullptr, nullptr, dt);
         check("casing: hysteresis holds at 67", !has(out, "back to"));
         s.motors[3].temp_casing = 60;
         out = r.step(&s, &cmd, nullptr, nullptr, dt);
         check("casing: clears at 60", has(out, "casing temperature back to 60C"));
-        // winding runs hotter by design: 100C is silent, 106 warns, 121 is critical
-        s.motors[3].temp_winding = 100;
+        // winding runs hotter by design: 105C is silent, 112 warns, 121 is critical
+        s.motors[3].temp_winding = 105;
         out = r.step(&s, &cmd, nullptr, nullptr, dt);
-        check("winding: 100C silent", out.empty());
-        s.motors[3].temp_winding = 106;
+        check("winding: 105C silent", out.empty());
+        s.motors[3].temp_winding = 112;
         out = r.step(&s, &cmd, nullptr, nullptr, dt);
-        check("winding: WARNING at 106", has(out, "winding temperature 106C >= 102C"));
+        check("winding: WARNING at 112", has(out, "winding temperature 112C >= 110C"));
         s.motors[3].temp_winding = 121;
         out = r.step(&s, &cmd, nullptr, nullptr, dt);
-        check("winding: EMERGENCY at 121", has(out, "EMERGENCY motor 3 left_knee: winding temperature 121C >= 114C"));
+        check("winding: EMERGENCY at 121", has(out, "EMERGENCY motor 3 left_knee: winding temperature 121C >= 117C"));
     }
 
     // ── not responding: torque asked for but not produced ──
@@ -121,7 +121,11 @@ int main() {
         check("unresp: dead driver fires",        has(out, "motor 4 left_ankle_pitch: NOT RESPONDING") && has(out, "tau_est is 0.5 Nm"));
         check("unresp: after ~1s",                ticks >= 19 && ticks <= 21);
         check("unresp: single line so far",       lines == 1);
-        s2.motors[4].tau = 20.0;   // torque comes back -> clears
+        // request dips below tau_min: NOT a clear (nothing proven), no line
+        MotorCommand c_small = c; c_small.q_target[4] = static_cast<float>(s2.motors[4].q + 0.05);
+        out = r2.step(&s2, &c_small, nullptr, nullptr, dt);
+        check("unresp: small request does not clear", out.empty());
+        s2.motors[4].tau = 20.0;   // torque actually seen again -> clears
         out = r2.step(&s2, &c, nullptr, nullptr, dt);
         check("unresp: clears when torque returns", has(out, "producing torque again"));
 

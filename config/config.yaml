@@ -47,14 +47,14 @@ hand:
 motor_health:
   # Fault/temperature observer (motor_health_rules.hpp). Log-only. All keys optional.
   enabled: true
-  # motor temperatures (deg C), two sensors judged separately. The SDK cuts out at
-  # casing 85 / winding 120 (unitree_sdk2 g1/common/terminations.hpp): WARNING at 85%
-  # of that so a person can react, EMERGENCY at 95% so it is declared before the
-  # cut-out. Clears 5C below warn.
+  # motor temperatures (deg C), two sensors judged separately. Measured on the real
+  # G1 (2026-09-11): winding 130 -> fault word 0x200 on that motor, then the whole
+  # robot loses torque. WARNING at 85% of the cut-out, EMERGENCY at 90%. Casing has
+  # not been driven to its cut-out; 85 (SDK header) is its reference. Clears 5C below warn.
   casing_warn_c: 72
-  casing_critical_c: 80
-  winding_warn_c: 102
-  winding_critical_c: 114
+  casing_critical_c: 76
+  winding_warn_c: 110
+  winding_critical_c: 117
   # NOT RESPONDING: the command asks for > tau_min Nm (kp*(q_cmd-q) - kd*dq) but
   # tau_est stays below tau_ratio of that for time_s. Position error is NOT used:
   # the policy holds standing targets far from the measured pose on purpose.
@@ -64,5 +64,6 @@ motor_health:
   # STATE FROZEN: q bit-identical for time_s while the command moved > cmd_move
   frozen_time_s: 1.0
   frozen_cmd_move: 0.02
-  # periodic one-line summary (hottest motor, hand temps, active faults); 0 = off
-  summary_period_s: 30
+  # periodic one-line summary (hottest motor, hand temps, active faults), seconds;
+  # 0 = off. Turn on (e.g. 30) for thermal load tests.
+  summary_period_s: 0
