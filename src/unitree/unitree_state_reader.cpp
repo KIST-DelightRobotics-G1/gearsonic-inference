@@ -34,6 +34,9 @@ static UnitreeState convert(const unitree_hg::msg::dds_::LowState_& src) {
         out.motors[i].q   = motors[i].q();
         out.motors[i].dq  = motors[i].dq();
         out.motors[i].tau = motors[i].tau_est();
+        out.motors[i].temp_casing  = motors[i].temperature()[0];
+        out.motors[i].temp_winding = motors[i].temperature()[1];
+        out.motors[i].error       = motors[i].motorstate();
     }
     return out;
 }

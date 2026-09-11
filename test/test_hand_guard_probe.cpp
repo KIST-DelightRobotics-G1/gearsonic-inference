@@ -134,7 +134,7 @@ int main() {
         auto pt = p; pt.temp_max_c = 60;
         HandGuard g(true, pt);
         auto s = meas_all(0.3f, 0.0f);
-        for (auto& mm : s.motors) mm.temperature = 65;
+        for (auto& mm : s.motors) mm.temp_casing = 65;
         auto o = g.apply(desired_left(1.5f), &s, dt);
         check("hot: latches on first tick",           g.latched(m) && near(o.kp[m], p.kp_hold));
     }

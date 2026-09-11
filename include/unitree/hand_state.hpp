@@ -13,7 +13,8 @@ struct HandMotorState {
     float   q{0.0f};        // position (rad)
     float   dq{0.0f};       // velocity (rad/s)
     float   tau{0.0f};      // estimated torque (Nm)
-    int16_t temperature{0}; // hottest of the two reported sensors (deg C)
+    int16_t temp_casing{0};  // temperature[0]: motor casing (deg C)
+    int16_t temp_winding{0}; // temperature[1]: motor winding (deg C)
 };
 
 struct HandState {

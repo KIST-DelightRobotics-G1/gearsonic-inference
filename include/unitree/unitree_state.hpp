@@ -9,9 +9,12 @@ namespace kist {
 constexpr int kNumMotors = 29;  // Unitree G1
 
 struct MotorState {
-    double q{0.0};    // position (rad)
-    double dq{0.0};   // velocity (rad/s)
-    double tau{0.0};  // estimated torque (Nm)
+    double   q{0.0};          // position (rad)
+    double   dq{0.0};         // velocity (rad/s)
+    double   tau{0.0};        // estimated torque (Nm)
+    int16_t  temp_casing{0};  // temperature[0]: motor casing (SDK limit 85C)
+    int16_t  temp_winding{0}; // temperature[1]: motor winding (SDK limit 120C)
+    uint32_t error{0};        // SDK motorstate fault word (0 = healthy)
 };
 
 struct UnitreeState {

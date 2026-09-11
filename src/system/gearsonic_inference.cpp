@@ -11,6 +11,7 @@
 #include "teleop/teleop_tracker.hpp"
 #include "unitree/hand_command_writer.hpp"
 #include "unitree/hand_state_reader.hpp"
+#include "unitree/motor_health_monitor.hpp"
 #include "unitree/unitree_command_writer.hpp"
 #include "unitree/unitree_state_reader.hpp"
 #include "vla/vla_token_receiver.hpp"
@@ -44,6 +45,27 @@ static HandGuard::Params parse_hand_guard(const YAML::Node& hand) {
     get("kp_hold",        p.kp_hold);
     get("temp_max_c",     p.temp_max_c);
     get("state_stale_ms", p.state_stale_ms);
+    return p;
+}
+
+// config.yaml `motor_health:` section — every key optional.
+static MotorHealthRules::Params parse_motor_health(const YAML::Node& n) {
+    MotorHealthRules::Params p;
+    if (!n) return p;
+    auto get = [&](const char* key, auto& dst) {
+        if (n[key]) dst = n[key].as<std::decay_t<decltype(dst)>>();
+    };
+    get("enabled",          p.enabled);
+    get("casing_warn_c",      p.casing_warn_c);
+    get("casing_critical_c",  p.casing_critical_c);
+    get("winding_warn_c",     p.winding_warn_c);
+    get("winding_critical_c", p.winding_critical_c);
+    get("unresp_tau_min",   p.unresp_tau_min);
+    get("unresp_tau_ratio", p.unresp_tau_ratio);
+    get("unresp_time_s",    p.unresp_time_s);
+    get("frozen_time_s",    p.frozen_time_s);
+    get("frozen_cmd_move",  p.frozen_cmd_move);
+    get("summary_period_s", p.summary_period_s);
     return p;
 }
 
@@ -89,6 +111,14 @@ bool GearsonicInference::start(const std::string& config_path) {
         return false;
     }
     hand_state_started_ = true;
+
+    // Fault/temperature observer over body + hand state and the WBC command
+    // buffer (a singleton member: valid before the controller starts).
+    // Log-only — no actuation decision is taken here yet.
+    MotorHealthMonitor::instance().start(&UnitreeStateReader::instance().unitree_state_buf,
+                                         &WholeBodyController::instance().motor_command_buf,
+                                         parse_motor_health(root["motor_health"]));
+    health_started_ = true;
 
     // VLA latent-action Rx rides the DDS factory UnitreeStateReader just
     // initialized. Pure intake — nothing moves until tokens arrive AND the
@@ -185,6 +215,10 @@ void GearsonicInference::stop() {
     if (writer_started_) {
         UnitreeCommandWriter::instance().stop();
         writer_started_ = false;
+    }
+    if (health_started_) {
+        MotorHealthMonitor::instance().stop();
+        health_started_ = false;
     }
     if (hand_state_started_) {
         HandStateReader::instance().stop();

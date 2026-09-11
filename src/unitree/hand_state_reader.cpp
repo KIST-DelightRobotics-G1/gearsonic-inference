@@ -20,7 +20,8 @@ static HandState convert(const unitree_hg::msg::dds_::HandState_& src) {
         out.motors[i].q           = m.q();
         out.motors[i].dq          = m.dq();
         out.motors[i].tau         = m.tau_est();
-        out.motors[i].temperature = std::max(m.temperature()[0], m.temperature()[1]);
+        out.motors[i].temp_casing  = m.temperature()[0];
+        out.motors[i].temp_winding = m.temperature()[1];
     }
     out.power_a = src.power_a();
     out.error   = src.error()[0];
