@@ -73,11 +73,16 @@ bool ObsDictModel::Infer() {
     return true;
 }
 
-ObsDictModel::~ObsDictModel() {
+void ObsDictModel::release() {
+    engine_.Destroy();
     if (stream_) {
         cudaStreamDestroy(stream_);
         stream_ = nullptr;
     }
+}
+
+ObsDictModel::~ObsDictModel() {
+    release();
 }
 
 } // namespace kist

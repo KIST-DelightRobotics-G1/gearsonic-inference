@@ -34,6 +34,12 @@ public:
     size_t       input_dim()  const { return input_buf_.size(); }
     size_t       output_dim() const { return output_buf_.size(); }
 
+    // Free the TRT engine and stream while the CUDA runtime is still up.
+    // The owners are static singletons: left to their destructors, this
+    // would run after main() during CUDA teardown and log
+    // "driver shutting down" errors. Idempotent.
+    void release();
+
     ~ObsDictModel();
 
 private:

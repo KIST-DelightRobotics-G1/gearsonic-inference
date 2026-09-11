@@ -54,6 +54,7 @@ public:
     using Token = std::array<float, kTokenDim>;
 
     bool init(const std::string& onnx_path);
+    void release() { model_.release(); }
 
     // One control tick: heading-state update, observation fill, inference.
     // Mode: smpl -> 2, else vr3point -> 1, else g1 (0). Fails only on

@@ -132,6 +132,9 @@ void PlannerInference::stop() {
     stop_ = true;
     if (loop_thread_.joinable())
         loop_thread_.join();
+    // GPU teardown here, not in the static destructor after main() —
+    // that runs during CUDA shutdown and logs "driver shutting down".
+    engine_.Destroy();
     if (stream_) {
         cudaStreamDestroy(stream_);
         stream_ = nullptr;

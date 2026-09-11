@@ -51,6 +51,11 @@ add_library(motion_token_publisher STATIC src/collector/motion_token_publisher.c
 target_include_directories(motion_token_publisher PUBLIC include)
 target_link_libraries(motion_token_publisher PUBLIC kist_idl unitree_sdk2)
 
+# ─── console_tee (stdout/stderr -> terminal + logs/latest.log) ───────────────
+add_library(console_tee STATIC src/common/console_tee.cpp)
+target_include_directories(console_tee PUBLIC include)
+set_target_properties(console_tee PROPERTIES CXX_STANDARD 20)
+
 # ─── pico_vr_reader ───────────────────────────────────────────────────────────
 add_library(pico_vr_reader STATIC
     src/pico/pico_vr_reader.cpp
@@ -154,7 +159,7 @@ add_library(gearsonic_inference STATIC
     src/system/gearsonic_inference.cpp
 )
 target_include_directories(gearsonic_inference PUBLIC include)
-target_link_libraries(gearsonic_inference PUBLIC control unitree_command_writer hand_state_reader hand_command_writer motion_token_publisher nav_cmd_receiver yaml-cpp)
+target_link_libraries(gearsonic_inference PUBLIC console_tee control unitree_command_writer hand_state_reader hand_command_writer motion_token_publisher nav_cmd_receiver yaml-cpp)
 set_target_properties(gearsonic_inference PROPERTIES CXX_STANDARD 20)
 
 # ─── main ─────────────────────────────────────────────────────────────────────

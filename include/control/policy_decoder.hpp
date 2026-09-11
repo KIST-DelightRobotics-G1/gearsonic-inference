@@ -29,6 +29,7 @@ public:
     static constexpr size_t kInputDim = 994;
 
     bool init(const std::string& onnx_path);
+    void release() { model_.release(); }
 
     // One control tick: observation fill, inference, post-processing
     // (q = default + scale * remap(action)). Retains the raw action.
