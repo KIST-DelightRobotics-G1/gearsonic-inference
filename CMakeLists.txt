@@ -77,6 +77,14 @@ add_library(hand_state_reader STATIC
 target_include_directories(hand_state_reader PUBLIC include)
 target_link_libraries(hand_state_reader PUBLIC unitree_sdk2)
 
+# ─── motor_health_monitor (fault/temperature observer, log-only) ─────────────
+add_library(motor_health_monitor STATIC
+    src/unitree/motor_health_monitor.cpp
+)
+target_include_directories(motor_health_monitor PUBLIC include)
+target_link_libraries(motor_health_monitor PUBLIC unitree_state_reader hand_state_reader)
+set_target_properties(motor_health_monitor PROPERTIES CXX_STANDARD 20)
+
 # ─── unitree_command_writer ──────────────────────────────────────────────────
 add_library(unitree_command_writer STATIC
     src/unitree/unitree_command_writer.cpp
@@ -159,7 +167,7 @@ add_library(gearsonic_inference STATIC
     src/system/gearsonic_inference.cpp
 )
 target_include_directories(gearsonic_inference PUBLIC include)
-target_link_libraries(gearsonic_inference PUBLIC console_tee control unitree_command_writer hand_state_reader hand_command_writer motion_token_publisher nav_cmd_receiver yaml-cpp)
+target_link_libraries(gearsonic_inference PUBLIC console_tee control unitree_command_writer hand_state_reader motor_health_monitor hand_command_writer motion_token_publisher nav_cmd_receiver yaml-cpp)
 set_target_properties(gearsonic_inference PROPERTIES CXX_STANDARD 20)
 
 # ─── main ─────────────────────────────────────────────────────────────────────
@@ -226,6 +234,11 @@ target_link_libraries(test_hand_command_writer PRIVATE hand_command_writer)
 # header-only guard stage — no link dependencies
 add_executable(test_hand_guard_probe test/test_hand_guard_probe.cpp)
 target_include_directories(test_hand_guard_probe PRIVATE include)
+
+# header-only fault rules — no link dependencies
+add_executable(test_motor_health_probe test/test_motor_health_probe.cpp)
+target_include_directories(test_motor_health_probe PRIVATE include)
+set_target_properties(test_motor_health_probe PROPERTIES CXX_STANDARD 20)
 
 # Gate A: smpl_pose vs gear_sonic Python vectors (test/gen_smpl_vectors.py)
 add_executable(test_smpl_pose test/test_smpl_pose.cpp)

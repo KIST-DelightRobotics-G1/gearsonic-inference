@@ -42,7 +42,7 @@ public:
         float  stall_time_s{0.3f};    // ... for this long -> latched
         float  stall_offset{0.25f};   // rad kept toward the target while latched
         float  kp_hold{1.5f};         // kp while latched
-        int    temp_max_c{0};         // motor deg C that latches immediately (0 = off)
+        int    temp_max_c{0};         // casing deg C that latches immediately (0 = off)
         double state_stale_ms{100.0}; // measurements older than this count as absent
     };
 
@@ -73,7 +73,7 @@ public:
 
             // ── stall detector ──
             bool cond = std::fabs(e) > p_.stall_err_th && std::fabs(dq_meas) < p_.stall_vel_th;
-            bool hot  = p_.temp_max_c > 0 && meas->motors[i].temperature >= p_.temp_max_c;
+            bool hot  = p_.temp_max_c > 0 && meas->motors[i].temp_casing >= p_.temp_max_c;
             stall_s_[i] = cond ? stall_s_[i] + static_cast<float>(dt_s) : 0.0f;
             bool latched = latched_[i];
             if (!latched && (hot || stall_s_[i] >= p_.stall_time_s)) latched = true;
