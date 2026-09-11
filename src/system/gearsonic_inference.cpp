@@ -1,6 +1,7 @@
 #include "system/gearsonic_inference.hpp"
 
 #include "common/config.hpp"
+#include "common/console_tee.hpp"
 #include "collector/motion_token_publisher.hpp"
 #include "control/whole_body_controller.hpp"
 #include "motion/input_handler.hpp"
@@ -22,6 +23,8 @@
 #include <type_traits>
 
 namespace kist {
+
+static const std::string kConsoleLogPath = "logs/latest.log";
 
 // config.yaml `hand:` section — every key optional, defaults in HandGuard::Params.
 static HandGuard::Params parse_hand_guard(const YAML::Node& hand) {
@@ -50,6 +53,9 @@ GearsonicInference& GearsonicInference::instance() {
 }
 
 bool GearsonicInference::start(const std::string& config_path) {
+    // Mirror the console from the first line: one file per run, overwritten.
+    ConsoleTee::instance().start(kConsoleLogPath);
+
     try {
         Config::instance().load(config_path);
     } catch (const std::exception& e) {
@@ -208,6 +214,7 @@ void GearsonicInference::stop() {
         PicoVRReader::instance().stop();
         vr_started_ = false;
     }
+    ConsoleTee::instance().stop();
 }
 
 // ── signals ───────────────────────────────────────────────────────────────────

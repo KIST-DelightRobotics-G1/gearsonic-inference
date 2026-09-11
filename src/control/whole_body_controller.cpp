@@ -69,6 +69,9 @@ void WholeBodyController::stop() {
     // The buffer's last word is always damping, so a still-running writer
     // can never keep republishing a stale pose target.
     publish_damping();
+    // GPU teardown here, not in static destructors (see ObsDictModel::release).
+    encoder_.release();
+    decoder_.release();
 }
 
 bool WholeBodyController::playback_snapshot(MotionSequence50Hz& motion, int& cursor) const {

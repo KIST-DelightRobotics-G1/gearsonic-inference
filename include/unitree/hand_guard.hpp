@@ -40,9 +40,9 @@ public:
         float  stall_err_th{0.15f};   // rad — |q_des - q_meas| above this ...
         float  stall_vel_th{0.05f};   // rad/s — ... while |dq_meas| below this ...
         float  stall_time_s{0.3f};    // ... for this long -> latched
-        float  stall_offset{0.05f};   // rad kept toward the target while latched
+        float  stall_offset{0.25f};   // rad kept toward the target while latched
         float  kp_hold{1.5f};         // kp while latched
-        int    temp_max_c{0};         // motor °C that latches immediately (0 = off)
+        int    temp_max_c{0};         // motor deg C that latches immediately (0 = off)
         double state_stale_ms{100.0}; // measurements older than this count as absent
     };
 

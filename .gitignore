@@ -6,3 +6,4 @@ thirdparty/*
 *.engine
 *.trt
 build-*/
+logs/

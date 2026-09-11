@@ -37,9 +37,9 @@ hand:
   stall_vel_th: 0.05
   stall_time_s: 0.3
   # while latched: q_cmd = q_meas + offset toward target, with kp_hold
-  stall_offset: 0.05
+  stall_offset: 0.25
   kp_hold: 1.5
-  # motor temperature (°C) that latches immediately; 0 = off
+  # motor temperature (deg C) that latches immediately; 0 = off
   temp_max_c: 0
   # hand state older than this -> open-loop pass-through
   state_stale_ms: 100

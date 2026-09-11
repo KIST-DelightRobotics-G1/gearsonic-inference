@@ -10,6 +10,7 @@ namespace kist {
 // instead of assembling the modules themselves.
 //
 //   GearsonicInference::instance().start("config/config.yaml");
+//     -> ConsoleTee (stdout/stderr mirrored to logs/latest.log)
 //     -> PicoVRReader -> InputHandler -> TeleopTracker
 //        -> UnitreeStateReader -> HandStateReader (waits for robot state) -> VlaTokenReceiver
 //        -> PlannerInference (+ playback provider wiring)
