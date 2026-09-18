@@ -21,11 +21,19 @@ struct HandCommand {
 //   2     -> thumb flexion  (unidirectional, 0..1.75 L / -1.75..0 R)
 //   3..4  -> index   (2 DOF, unidirectional flexion — 0..±1.57 / ±1.75)
 //   5..6  -> middle  (2 DOF, unidirectional flexion)
-// The split lets the two controller analog axes drive anatomically
-// aligned finger groups: grip -> thumb, trigger -> index+middle.
+// The two controller analog axes drive the finger groups the way the
+// operator's own fingers sit on the controller: the index finger rests on
+// the TRIGGER, the middle finger squeezes the GRIP. So trigger -> index,
+// grip -> thumb + middle. Grip alone therefore closes thumb and middle
+// around an extended index finger — the pointing gesture — and both axes
+// together make a full fist.
 inline constexpr int kThumbBegin  = 0;
-inline constexpr int kFingerBegin = 3;
+inline constexpr int kIndexBegin  = 3;
+inline constexpr int kMiddleBegin = 5;
 inline constexpr int kMotorEnd    = 7;
+
+// Controller axis for motor i: true = trigger (index), false = grip.
+inline constexpr bool motor_on_trigger(int i) { return i >= kIndexBegin && i < kMiddleBegin; }
 
 // Explicit open/closed endpoints (empirically confirmed on the real hand):
 //   the thumb bend (1) is bidirectional — open/close sit on opposite
@@ -44,10 +52,16 @@ inline constexpr int kMotorEnd    = 7;
 // ±1.05 range on both hands: sweeping it during the grasp visibly twists
 // the thumb sideways, so the thumb only flexes (motors 1..2) and never
 // rotates.
-inline constexpr std::array<float, 7> kDex3LeftOpen  = { 0.00f, -0.724f,  0.00f,  0.00f,  0.00f,  0.00f,  0.00f};
-inline constexpr std::array<float, 7> kDex3LeftClose = { 0.00f,  1.05f,   1.75f, -1.57f, -1.75f, -1.57f, -1.75f};
-inline constexpr std::array<float, 7> kDex3RightOpen  = { 0.00f,  0.742f,  0.00f,  0.00f,  0.00f,  0.00f,  0.00f};
-inline constexpr std::array<float, 7> kDex3RightClose = { 0.00f, -1.05f,  -1.75f,  1.57f,  1.75f,  1.57f,  1.75f};
+//
+// The thumb's OPEN bend (motor 1) is deliberately short of the URDF limit
+// (-0.724 L / 0.742 R): at the limit the thumb splays uselessly far from
+// the palm. kThumbOpenBend is the tuning knob — smaller magnitude = a
+// narrower resting thumb; the closed endpoint is untouched.
+inline constexpr float kThumbOpenBend = 0.35f;
+inline constexpr std::array<float, 7> kDex3LeftOpen  = { 0.00f, -kThumbOpenBend, 0.00f,  0.00f,  0.00f,  0.00f,  0.00f};
+inline constexpr std::array<float, 7> kDex3LeftClose = { 0.00f,  1.05f,          1.75f, -1.57f, -1.75f, -1.57f, -1.75f};
+inline constexpr std::array<float, 7> kDex3RightOpen  = { 0.00f,  kThumbOpenBend, 0.00f,  0.00f,  0.00f,  0.00f,  0.00f};
+inline constexpr std::array<float, 7> kDex3RightClose = { 0.00f, -1.05f,         -1.75f,  1.57f,  1.75f,  1.57f,  1.75f};
 
 // URDF joint limits (the table above), used to clamp external/derived
 // targets before publishing.

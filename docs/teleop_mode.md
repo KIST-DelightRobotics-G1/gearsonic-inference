@@ -34,10 +34,10 @@ Connect the headset from its XRoboToolkit app.
 | Y held 1s | Mode up into hard actions (e.g. Run) — one hold per step |
 | X | Mode down |
 | Undefined | Height up / down (crouch modes) |
-| B held 1s | Teleop on / off (engage in the reference pose: forearms 90° forward, palms inward) |
-| A held 1s | Full-body teleop on / off (from IDLE only; whole body followed, no locomotion; arms follow the tracked wrists) |
-| Left / right grip (analog) | Left / right Dex3-1 thumb close (0 = open, 1 = pressed against fingers) |
-| Left / right trigger (analog) | Left / right Dex3-1 index+middle close (0 = open, 1 = cage / fist) |
+| B held 1s | Teleop on / off (engage in the reference pose: forearms 90° forward, palms inward; works with trigger/grip held) |
+| A held 1s | Full-body teleop on / off (from IDLE only; whole body followed, no locomotion; arms follow the tracked wrists; works with trigger/grip held) |
+| Left / right trigger (analog) | Left / right Dex3-1 index close (0 = open, 1 = curled) |
+| Left / right grip (analog) | Left / right Dex3-1 thumb + middle close (0 = open, 1 = closed). Grip alone = pointing, grip + trigger = fist |
 | A + B + X + Y held 1s | Emergency stop |
 
 ## Ownership vs VLA

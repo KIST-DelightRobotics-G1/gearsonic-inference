@@ -23,7 +23,8 @@ namespace kist {
 //     the fallbacks below take over at the origin.
 //  2. VR grip/trigger values from PicoVRReader::ctrl_buf, mapped linearly
 //     onto each hand's URDF joint range (open -> closed as the axis
-//     presses in). InputHandler is not on the path: the analog axes are
+//     presses in): trigger -> index, grip -> thumb + middle (grip alone
+//     points). InputHandler is not on the path: the analog axes are
 //     orthogonal to the movement command it produces.
 //
 // The VR path is gated by TeleopTracker::calibrated(): until teleop

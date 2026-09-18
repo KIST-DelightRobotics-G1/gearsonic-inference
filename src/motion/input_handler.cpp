@@ -27,7 +27,7 @@ static constexpr int    kCrouchFirst  = static_cast<int>(LocomotionMode::IDEL_SQ
 static constexpr int    kCrouchLast   = static_cast<int>(LocomotionMode::IDEL_KNEEL); // 6
 static constexpr double kHeightSeed   = 0.8;   // on entering a crouch mode (gear_sonic)
 // E-stop gesture: all four face buttons held for a full second. Buttons
-// (not the grip axes) so hand control — grip=thumb, trigger=index+middle
+// (not the grip axes) so hand control — trigger=index, grip=thumb+middle
 // — stays orthogonal; four-buttons+hold rules out reflex/accident.
 // Single-button actions defer 30 ms to distinguish deliberate presses
 // from the first-arriving buttons of a combo (rising edges never land on
