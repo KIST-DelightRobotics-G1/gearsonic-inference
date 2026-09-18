@@ -118,10 +118,12 @@ void TeleopTracker::loop() {
     }
 }
 
-// B held 1s (triggers released — a pressed trigger means the operator is
-// closing the Dex3 fingers, not gesturing) — a toggle: not calibrated ->
-// calibrate (teleop on); calibrated -> reset (back to g1). Must be
-// released before it can fire again; re-entry recalibrates fresh.
+// B held 1s — a toggle: not calibrated -> calibrate (teleop on);
+// calibrated -> reset (back to g1). Must be released before it can fire
+// again; re-entry recalibrates fresh. The trigger/grip axes are NOT part
+// of the gate (operator decision 2026-09-18): the hands may be closed on
+// an object while teleop is toggled — the 1s hold on a lone face button
+// is the whole guard.
 //
 // Also gated by "B alone among the face buttons": A+B+X+Y is the e-stop
 // combo, and any 2-button hold voids per-button gestures (see
@@ -141,11 +143,8 @@ void TeleopTracker::check_calibration_gesture() {
     }
 
     auto ctrl = PicoVRReader::instance().ctrl_buf.GetData();
-    bool b_alone = ctrl && ctrl->btn_b &&
-                   !ctrl->btn_a && !ctrl->btn_x && !ctrl->btn_y;
-    bool held = b_alone &&
-                ctrl->left_trigger < kTriggerIdle &&
-                ctrl->right_trigger < kTriggerIdle;
+    bool held = ctrl && ctrl->btn_b &&
+                !ctrl->btn_a && !ctrl->btn_x && !ctrl->btn_y;
     if (!held) {
         calib_hold_ticks_     = 0;
         calib_gesture_latched_ = false;
@@ -192,11 +191,8 @@ void TeleopTracker::check_fullbody_gesture() {
     }
 
     auto ctrl = PicoVRReader::instance().ctrl_buf.GetData();
-    bool a_alone = ctrl && ctrl->btn_a &&
-                   !ctrl->btn_b && !ctrl->btn_x && !ctrl->btn_y;
-    bool held = a_alone &&
-                ctrl->left_trigger < kTriggerIdle &&
-                ctrl->right_trigger < kTriggerIdle;
+    bool held = ctrl && ctrl->btn_a &&
+                !ctrl->btn_b && !ctrl->btn_x && !ctrl->btn_y;
     if (!held) {
         fb_hold_ticks_      = 0;
         fb_gesture_latched_ = false;

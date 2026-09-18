@@ -36,11 +36,10 @@ static inline uint8_t ris_mode(uint8_t id, bool enable) {
 }
 
 // Blend "open" (input=0) to "closed" (input=1) between explicit endpoints,
-// with a per-motor group input. Motor 0..2 are the thumb, driven by the
-// controller's grip axis; 3..6 are the index+middle fingers, driven by
-// the trigger. This gives the operator two independent grasps — a
-// thumb-only pinch (grip only), a finger cage (trigger only), or a full
-// power grip (both) — mapped onto the natural hand-on-controller pose.
+// with a per-motor group input. Trigger drives the index finger (motors
+// 3..4), grip drives thumb + middle (0..2, 5..6) — see hand_command.hpp.
+// Grip alone = pointing (index extended), trigger alone = index curled,
+// both = full fist.
 //
 // The endpoints come from kDex3{Left,Right}{Open,Close} — the thumb bend
 // (motor 1) crosses zero, the rest pivot on one side of zero, and the
@@ -53,7 +52,7 @@ static HandCommand from_grip_and_trigger(double grip, double trigger, bool is_le
     for (int i = 0; i < kMotorCount; ++i) {
         float open_q  = is_left ? kDex3LeftOpen[i]  : kDex3RightOpen[i];
         float close_q = is_left ? kDex3LeftClose[i] : kDex3RightClose[i];
-        double t = (i < kFingerBegin) ? grip : trigger;
+        double t = motor_on_trigger(i) ? trigger : grip;
         cmd.q[i]  = open_q + static_cast<float>(t) * (close_q - open_q);
         cmd.kp[i] = kHandKp;
         cmd.kd[i] = kHandKd;

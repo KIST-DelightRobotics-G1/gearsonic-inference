@@ -144,7 +144,6 @@ private:
     std::atomic<bool> stop_{false};
 
     static constexpr double kLoopDt = 0.02;  // 50Hz, original POSE loop rate
-    static constexpr double kTriggerIdle    = 0.5;  // gesture needs triggers released
     static constexpr int    kCalibHoldTicks = 50;   // 1s at 50Hz
     // Full-body: frames the policy lags the operator (latency knob, ticks;
     // upstream steady state is about one 5-frame chunk) and the body-stream
