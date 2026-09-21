@@ -157,6 +157,10 @@ source env.sh && run_vr_daemon
 ./build/kist-gearsonic-inference
 ```
 
+Everything the process prints is also written to `logs/latest.log`
+(overwritten each run, inside the container). Motor faults and temperatures
+appear there as `[MotorHealth]` lines.
+
 Both modes run from the same binary; ownership is first-come:
 
 - **Teleop mode** — joystick locomotion, VR arm/hand tracking:
