@@ -5,6 +5,7 @@
 #include "unitree/motor_health_rules.hpp"
 #include "unitree/unitree_state.hpp"
 
+#include <array>
 #include <atomic>
 #include <thread>
 
@@ -24,6 +25,10 @@ public:
                const MotorHealthRules::Params& params = MotorHealthRules::Params{});
     void stop();
 
+    // Latest condition bits per body motor (MotorHealthRules::kFault |
+    // kFrozen | kUnresp), for observers such as StateTrace.
+    uint8_t flags(int motor) const { return flags_[motor].load(std::memory_order_relaxed); }
+
 private:
     MotorHealthMonitor() = default;
     void loop();
@@ -31,6 +36,7 @@ private:
     const DataBuffer<UnitreeState>* body_{nullptr};
     const DataBuffer<MotorCommand>* cmd_{nullptr};
     MotorHealthRules  rules_;
+    std::array<std::atomic<uint8_t>, kNumMotors> flags_{};
     std::thread       thread_;
     std::atomic<bool> stop_{false};
 };

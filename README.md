@@ -159,7 +159,8 @@ source env.sh && run_vr_daemon
 
 Everything the process prints is also written to `logs/latest.log`
 (overwritten each run, inside the container). Motor faults and temperatures
-appear there as `[MotorHealth]` lines.
+appear there as `[MotorHealth]` lines. A per-tick numeric trace of every
+stage goes to `logs/latest.trace`; read it with `tools/read_trace.py`.
 
 Both modes run from the same binary; ownership is first-come:
 

@@ -1,4 +1,5 @@
 #include "control/whole_body_controller.hpp"
+#include "control/state_trace.hpp"
 #include "common/joint_order.hpp"
 #include "common/math_utils.hpp"
 #include "common/robot_params.hpp"
@@ -419,10 +420,36 @@ void WholeBodyController::loop() try {
                 break;  // unreachable — handled by the gate above
         }
 
+        trace_tick(t0);
         std::this_thread::sleep_until(t0 + period);
     }
 } catch (const std::exception& e) {
     std::cerr << "[WholeBodyController] loop exception: " << e.what() << "\n";
+}
+
+// One trace row per tick (see state_trace.hpp). Only the controller's own
+// fields are passed; the recorder reads every module buffer itself.
+void WholeBodyController::trace_tick(std::chrono::steady_clock::time_point t0) {
+    auto& trace = StateTrace::instance();
+    if (!trace.enabled())
+        return;
+    StateTrace::TickInfo info;
+    info.t0           = t0;
+    info.wbc_state    = static_cast<int>(state_.load());
+    info.encoder_mode = encoder_.mode();
+    {
+        std::lock_guard<std::mutex> lock(playback_mutex_);
+        info.planner_cursor = cursor_;
+        if (playback_motion_.timesteps > 0)
+            info.planner_frame = &playback_motion_.frames[std::clamp(cursor_, 0, playback_motion_.timesteps - 1)];
+    }
+    {
+        std::lock_guard<std::mutex> l(timing_mutex_);
+        info.timing_enc_us   = timing_.encoder;
+        info.timing_dec_us   = timing_.decoder;
+        info.timing_total_us = timing_.total;
+    }
+    trace.record(info);
 }
 
 // ─── arbitration + VLA external-token mode ────────────────────────────────────

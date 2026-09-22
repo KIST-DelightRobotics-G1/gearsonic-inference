@@ -2,6 +2,7 @@
 
 #include "unitree/hand_command.hpp"
 #include "unitree/hand_guard.hpp"
+#include "common/data_buffer.hpp"
 
 #include <unitree/robot/channel/channel_publisher.hpp>
 #include <unitree/idl/hg/HandCmd_.hpp>
@@ -50,6 +51,10 @@ public:
 
     // Immediately publish a stop command to both hands (safe shutdown).
     void send_stop();
+
+    // Last published pair (observers: StateTrace). SetData only.
+    struct HandCommandPair { HandCommand left, right; };
+    DataBuffer<HandCommandPair> last_cmd_buf;
 
 private:
     HandCommandWriter() = default;

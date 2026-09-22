@@ -58,6 +58,8 @@ void MotorHealthMonitor::loop() {
 
         for (const auto& line : rules_.step(body.get(), cmd.get(), l, r, dt))
             std::cerr << line << "\n";
+        for (int m = 0; m < kNumMotors; ++m)
+            flags_[m].store(rules_.body_flags(m), std::memory_order_relaxed);
     }
 }
 

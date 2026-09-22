@@ -69,6 +69,7 @@ private:
     bool hand_writer_started_{false};
     bool token_pub_started_{false};
     bool control_started_{false};
+    bool trace_started_{false};
 
     std::atomic<bool> quit_{false};
 };

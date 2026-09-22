@@ -157,9 +157,11 @@ add_library(control STATIC
     src/control/token_encoder.cpp
     src/control/policy_decoder.cpp
     src/control/whole_body_controller.cpp
+    src/control/state_trace.cpp
 )
 target_include_directories(control PUBLIC include)
-target_link_libraries(control PUBLIC tensorrt_inference planner_inference unitree_state_reader teleop_tracker vla_token_receiver)
+target_link_libraries(control PUBLIC tensorrt_inference planner_inference unitree_state_reader teleop_tracker vla_token_receiver
+                                     hand_state_reader hand_command_writer motor_health_monitor pico_vr_reader)
 set_target_properties(control PROPERTIES CXX_STANDARD 20)
 
 # ─── gearsonic_inference (system facade — the external C++ API) ─────────────────
@@ -248,6 +250,11 @@ target_link_libraries(test_smpl_pose PRIVATE smpl_fk)
 add_executable(test_smpl_resample_probe test/test_smpl_resample_probe.cpp)
 target_include_directories(test_smpl_resample_probe PRIVATE include)
 set_target_properties(test_smpl_resample_probe PROPERTIES CXX_STANDARD 20)
+
+# header-only trace column layout — no link dependencies
+add_executable(test_state_trace_probe test/test_state_trace_probe.cpp)
+target_include_directories(test_state_trace_probe PRIVATE include)
+set_target_properties(test_state_trace_probe PROPERTIES CXX_STANDARD 20)
 
 # smpl encoder mode — slot perturbation scan (optional offline check)
 add_executable(test_smpl_encoder_probe test/test_smpl_encoder_probe.cpp)

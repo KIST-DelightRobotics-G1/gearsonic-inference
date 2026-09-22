@@ -152,6 +152,7 @@ void HandCommandWriter::publish(const HandCommand& left, const HandCommand& righ
     fill_msg(rmsg, right);
     left_pub_->Write(lmsg);
     right_pub_->Write(rmsg);
+    last_cmd_buf.SetData(HandCommandPair{left, right});
 }
 
 void HandCommandWriter::loop() {

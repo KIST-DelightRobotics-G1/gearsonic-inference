@@ -43,6 +43,8 @@ public:
 
     // Encoder mode of the last CONTROL tick (g1=0, teleop=1, -1 before first)
     int encoder_mode() const { return encoder_.mode(); }
+    // Raw policy output of the last decoder step (IsaacLab order), for StateTrace.
+    decltype(auto) last_action() const { return decoder_.last_action(); }
 
     // ── outputs ─────────────────────────────────────────────────
     DataBuffer<MotorCommand> motor_command_buf;
@@ -70,6 +72,7 @@ private:
     void tick_init();
     void tick_control();
     void advance_playback();
+    void trace_tick(std::chrono::steady_clock::time_point t0);
 
     // ── arbitration (see control_arbiter.hpp) ──────────────────
     // This loop is the ControlArbiter stage's single writer:
