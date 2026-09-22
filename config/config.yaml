@@ -67,3 +67,9 @@ motor_health:
   # periodic one-line summary (hottest motor, hand temps, active faults), seconds;
   # 0 = off. Turn on (e.g. 30) for thermal load tests.
   summary_period_s: 0
+
+trace:
+  # Per-tick numeric trace of every stage (state_trace.hpp): logs/latest.trace,
+  # overwritten each run, read with tools/read_trace.py. ~100 KB/s.
+  enabled: true
+  path: logs/latest.trace

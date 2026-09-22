@@ -98,6 +98,13 @@ public:
         summary_s_ = 0;
     }
 
+    enum : uint8_t { kFault = 1, kFrozen = 2, kUnresp = 4 };
+    // Current condition bits for a body motor.
+    uint8_t body_flags(int i) const {
+        const auto& b = body_[i];
+        return static_cast<uint8_t>((b.error_last ? kFault : 0) | (b.frozen ? kFrozen : 0) | (b.unresp ? kUnresp : 0));
+    }
+
     int active_faults() const {
         int n = 0;
         for (const auto& b : body_) n += (b.error_last != 0) + b.unresp + b.frozen + (b.casing_level == 2) + (b.winding_level == 2);

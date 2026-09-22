@@ -57,6 +57,21 @@ writes `[MotorHealth]` lines and changes no command. All keys optional.
 | `frozen_time_s`, `frozen_cmd_move` | `1.0`, `0.02` | STATE FROZEN: measured q bit-identical for this long while the command moved more than this |
 | `summary_period_s` | `0` | periodic hottest-motor / faults line; `0` = off (turn on for thermal tests) |
 
+## `trace`
+
+Per-tick numeric trace of every stage (operator inputs, smpl / vr3 references,
+planner frame, encoder token, decoder action and q_target, robot q/dq/tau,
+temperatures, fault words, IMU, hand state and commands, motor-health flags).
+One float32 row per 50 Hz tick, overwritten each run. Read it with
+`python3 tools/read_trace.py logs/latest.trace` (summary), `--plot <cols>`,
+or `--csv out.csv --cols q_26 dq fault_26 --from 120 --to 135` to export a
+column/time selection for a spreadsheet.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | record the trace |
+| `path` | `logs/latest.trace` | output file (inside the container, like the console mirror) |
+
 ## VLA-mode constants (compile-time)
 
 The external-token behavior is tuned by constants, not YAML — they are

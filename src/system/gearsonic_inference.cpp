@@ -3,6 +3,7 @@
 #include "common/config.hpp"
 #include "common/console_tee.hpp"
 #include "collector/motion_token_publisher.hpp"
+#include "control/state_trace.hpp"
 #include "control/whole_body_controller.hpp"
 #include "motion/input_handler.hpp"
 #include "motion/nav_cmd_receiver.hpp"
@@ -184,6 +185,16 @@ bool GearsonicInference::start(const std::string& config_path) {
     }
     token_pub_started_ = true;
 
+    // Per-tick numeric trace (logs/latest.trace) — pure observer of every
+    // stage; the controller only hands it its own fields each tick.
+    {
+        auto tr = root["trace"];
+        bool trace_on = !tr || !tr["enabled"] || tr["enabled"].as<bool>();
+        std::string trace_path = (tr && tr["path"]) ? tr["path"].as<std::string>() : "logs/latest.trace";
+        if (trace_on && StateTrace::instance().start(trace_path))
+            trace_started_ = true;
+    }
+
     if (!control.start(root["control"]["encoder_path"].as<std::string>(),
                        root["control"]["decoder_path"].as<std::string>(),
                        /*auto_start_control=*/true)) {
@@ -203,6 +214,10 @@ void GearsonicInference::stop() {
     if (control_started_) {
         WholeBodyController::instance().stop();
         control_started_ = false;
+    }
+    if (trace_started_) {
+        StateTrace::instance().stop();
+        trace_started_ = false;
     }
     if (token_pub_started_) {
         MotionTokenPublisher::instance().stop();
