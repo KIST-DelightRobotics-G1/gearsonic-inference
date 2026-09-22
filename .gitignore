@@ -7,3 +7,5 @@ thirdparty/*
 *.trt
 build-*/
 logs/
+__pycache__/
+*.pyc
