@@ -103,15 +103,20 @@ void TeleopTracker::loop() {
         } else if (body.timestamp != last_body_time_) {
             last_body_time_ = body.timestamp;
             process(*body.data);
+            if (fullbody_engaged_)
+                ingest_fullbody_sample(*body.data, body.timestamp);
         }
 
-        // Full-body runs every tick on the latest sample (sample-and-hold),
-        // not per new sample: the window's frames must be 50Hz-spaced.
+        // Full-body: one resampled pose per tick — the window's frames must
+        // be 50Hz-spaced, and the device stream is neither 50Hz nor even.
         if (fullbody_engaged_) {
-            if (!body.HasData() || body.GetAgeMs() > kFullBodyStaleMs)
+            if (!body.HasData() || body.GetAgeMs() > kFullBodyStaleMs) {
                 disengage_fullbody("body stream stale");
-            else
-                process_fullbody(*body.data);
+            } else {
+                if (fb_resampler_.count() == 0)   // engaged this tick on an already-seen sample
+                    ingest_fullbody_sample(*body.data, body.timestamp);
+                process_fullbody(t0);
+            }
         }
 
         std::this_thread::sleep_until(t0 + period);
@@ -212,6 +217,8 @@ void TeleopTracker::check_fullbody_gesture() {
         } else {
             hist_count_       = 0;
             arm_reach_        = ArmReachState{};
+            fb_resampler_.reset();
+            fb_rate_logged_   = false;
             fullbody_engaged_ = true;
             std::cout << "[TeleopTracker] gesture (A 1s): full-body teleop on (smpl)\n";
         }
@@ -225,21 +232,19 @@ void TeleopTracker::disengage_fullbody(const char* why) {
     std::cout << "[TeleopTracker] full-body teleop off (" << why << ") -> g1\n";
 }
 
-// One SmplPose per tick into the delay line, then the window the encoder
-// reads: frame f is the sample kLookaheadTicks - f ticks old, clamped to
-// the newest (held) beyond it and to the oldest we have during warm-up.
-void TeleopTracker::process_fullbody(const PicoVRBodyPose& body) {
-    hist_head_ = (hist_count_ == 0) ? 0 : (hist_head_ + 1) % kHistory;
-    history_[hist_head_] = smpl_fk(body);
+// Per device sample: FK (and the arm re-solve) once, into the resampler.
+void TeleopTracker::ingest_fullbody_sample(const PicoVRBodyPose& body,
+                                           std::chrono::steady_clock::time_point t) {
+    SmplPose pose = smpl_fk(body);
     if (kFullBodyPositionArms)
-        smpl_arms_from_tracked_wrists(history_[hist_head_], body, arm_reach_);
-    if (hist_count_ < kHistory) ++hist_count_;
+        smpl_arms_from_tracked_wrists(pose, body, arm_reach_);
+    fb_resampler_.push(pose, t);
 
-    if (kFullBodyDebugLog && ++fb_debug_ticks_ >= 50) {
+    if (kFullBodyDebugLog && ++fb_debug_ticks_ >= 30) {
         fb_debug_ticks_ = 0;
         // SMPL-24: shoulders 16/17, elbows 18/19, wrists 20/21; the tracked
         // stream's "wrist" keypoints are 22/23 (as the 3-point path uses).
-        const auto& jl = history_[hist_head_].joints_local;
+        const auto& jl = pose.joints_local;
         auto dist = [](const std::array<double, 3>& a, const std::array<double, 3>& b) {
             return std::sqrt((a[0]-b[0])*(a[0]-b[0]) + (a[1]-b[1])*(a[1]-b[1]) + (a[2]-b[2])*(a[2]-b[2]));
         };
@@ -258,6 +263,28 @@ void TeleopTracker::process_fullbody(const PicoVRBodyPose& body) {
                     "   R: elbow %5.1f deg, %.2fm (tracked %.2fm)   [straight arm: ~180 deg, smpl ~0.51m]\n",
                     elbow_deg(16, 18, 20), dist(jl[16], jl[20]), tracked(16, 22),
                     elbow_deg(17, 19, 21), dist(jl[17], jl[21]), tracked(17, 23));
+    }
+}
+
+// Per 50Hz tick: one grid pose from the resampler into the delay line, then
+// the window the encoder reads: frame f is the pose kLookaheadTicks - f
+// ticks old, clamped to the newest (held) beyond it and to the oldest we
+// have during warm-up.
+void TeleopTracker::process_fullbody(std::chrono::steady_clock::time_point now) {
+    SmplPose pose;
+    if (!fb_resampler_.sample(now, pose))
+        return;
+    hist_head_ = (hist_count_ == 0) ? 0 : (hist_head_ + 1) % kHistory;
+    history_[hist_head_] = pose;
+    if (hist_count_ < kHistory) ++hist_count_;
+
+    // Once per engage, after the interval estimate has settled: what the
+    // headset actually delivers and the grid delay chosen for it.
+    if (!fb_rate_logged_ && hist_count_ >= kHistory && fb_resampler_.count() >= 2) {
+        fb_rate_logged_ = true;
+        std::printf("[TeleopTracker] full-body body stream ~%.0f Hz -> resample delay %.0f ms "
+                    "(+ %d-tick lookahead)\n",
+                    1.0 / fb_resampler_.interval_s(), fb_resampler_.delay_s() * 1000.0, kLookaheadTicks);
     }
 
     SmplPoseWindow w;
