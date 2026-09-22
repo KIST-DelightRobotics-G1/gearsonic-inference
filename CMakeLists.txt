@@ -244,6 +244,11 @@ set_target_properties(test_motor_health_probe PROPERTIES CXX_STANDARD 20)
 add_executable(test_smpl_pose test/test_smpl_pose.cpp)
 target_link_libraries(test_smpl_pose PRIVATE smpl_fk)
 
+# header-only 50Hz resampler — no link dependencies
+add_executable(test_smpl_resample_probe test/test_smpl_resample_probe.cpp)
+target_include_directories(test_smpl_resample_probe PRIVATE include)
+set_target_properties(test_smpl_resample_probe PROPERTIES CXX_STANDARD 20)
+
 # smpl encoder mode — slot perturbation scan (optional offline check)
 add_executable(test_smpl_encoder_probe test/test_smpl_encoder_probe.cpp)
 target_link_libraries(test_smpl_encoder_probe PRIVATE control)

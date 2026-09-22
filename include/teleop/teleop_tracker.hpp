@@ -4,6 +4,7 @@
 #include "pico/pico_vr_body_pose.hpp"
 #include "teleop/smpl_arm_reach.hpp"
 #include "teleop/smpl_pose_window.hpp"
+#include "teleop/smpl_resampler.hpp"
 #include "teleop/vr_3point.hpp"
 
 #include <array>
@@ -87,7 +88,10 @@ private:
 
     // full-body flavor
     void check_fullbody_gesture();
-    void process_fullbody(const PicoVRBodyPose& body);
+    // Full-body: FK once per device sample into the resampler, then one
+    // 50Hz-grid pose per tick into the delay line (see smpl_resampler.hpp).
+    void ingest_fullbody_sample(const PicoVRBodyPose& body, std::chrono::steady_clock::time_point t);
+    void process_fullbody(std::chrono::steady_clock::time_point now);
     void disengage_fullbody(const char* why);
 
     // raw 3-point [L, R, neck], root-relative (before calibration)
@@ -118,9 +122,13 @@ private:
     // encoder wants ten frames "ahead of the cursor"; live tracking has
     // none, so the policy tracks the operator kLookaheadTicks late and the
     // newest sample is held into the remaining slots (the window gear_sonic's
-    // streamed-motion merger yields in steady state).
+    // streamed-motion merger yields in steady state). The delay line is fed
+    // from the resampler — 50Hz-grid poses, not raw device samples — so
+    // its frames are evenly spaced whatever the headset's rate does.
     int  fb_hold_ticks_{0};
     bool fb_gesture_latched_{false};
+    SmplResampler fb_resampler_;
+    bool fb_rate_logged_{false};
     static constexpr int kHistory = 16;
     std::array<SmplPose, kHistory> history_{};
     int hist_count_{0};
