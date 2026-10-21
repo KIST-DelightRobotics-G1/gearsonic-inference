@@ -73,3 +73,8 @@ trace:
   # overwritten each run, read with tools/read_trace.py. ~100 KB/s.
   enabled: true
   path: logs/latest.trace
+
+record_control:
+  # VR-button recording control for kist-data-collector over DDS
+  # (B tap start, B double-tap stop, then A tap = success / A double-tap = fail).
+  enabled: true

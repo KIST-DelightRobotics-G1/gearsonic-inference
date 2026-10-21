@@ -3,7 +3,11 @@
 #include "common/data_buffer.hpp"
 #include "motion/movement_state.hpp"
 #include "motion/nav_command.hpp"
+#include "motion/tap_detector.hpp"
+#include "collector/record_control.hpp"
 #include <atomic>
+#include <functional>
+#include <mutex>
 #include <thread>
 
 namespace kist {
@@ -39,6 +43,14 @@ public:
     // VLA session. (A VR-link loss does NOT disarm: the selected mode
     // survives the stale safe-stop and the stick resumes on recovery.)
     void disarm() { mode_index_ = 0; }
+
+    // Short-press gestures on A and B (tap_detector.hpp): a tap is a press
+    // under 0.3 s, a double two taps within 0.35 s; the 1 s holds are
+    // untouched and 0.3..1 s is a dead band. Delivered to one sink (the
+    // recording commander) from this loop's thread. A tap still drops
+    // locomotion to IDLE as before — the sink sees it in addition.
+    using TapSink = std::function<void(TapButton, TapKind)>;
+    void set_tap_sink(TapSink sink) { std::lock_guard<std::mutex> l(tap_sink_mutex_); tap_sink_ = std::move(sink); }
 
     // Emergency stop: latched once A+B+X+Y are all held for 1s.
     // One-way — never clears until the process restarts. Deliberately an
@@ -77,6 +89,13 @@ private:
     std::atomic<int> mode_index_{0};  // IDLE
 
     HoldTrigger a_press_, x_press_, y_press_, y_hold_;
+    TapDetector a_tap_, b_tap_;
+    TapSink     tap_sink_;
+    std::mutex  tap_sink_mutex_;
+    void emit_tap(TapButton b, TapKind k) {
+        TapSink s; { std::lock_guard<std::mutex> l(tap_sink_mutex_); s = tap_sink_; }
+        if (s) s(b, k);
+    }
     int    estop_hold_ticks_{0};
     std::atomic<bool> estop_{false};
 

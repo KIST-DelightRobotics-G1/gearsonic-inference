@@ -64,6 +64,7 @@ private:
     bool health_started_{false};
     bool vla_started_{false};
     bool nav_rx_started_{false};
+    bool record_ctl_started_{false};
     bool planner_started_{false};
     bool writer_started_{false};
     bool hand_writer_started_{false};

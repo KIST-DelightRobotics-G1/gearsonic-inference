@@ -30,6 +30,9 @@ Connect the headset from its XRoboToolkit app.
 | Left stick | Move (magnitude = speed) |
 | Right stick | Rotate facing |
 | A | Return to IDLE |
+| B tap (< 0.3 s) | Recording start (kist-data-collector over DDS) |
+| B double-tap (within 0.35 s) | Recording stop |
+| A tap / A double-tap (after a stop) | Label the stopped episode success / fail (A tap also returns to IDLE) |
 | Y | Mode up (IDLE / Slow Walk / Walk) |
 | Y held 1s | Mode up into hard actions (e.g. Run) — one hold per step |
 | X | Mode down |

@@ -117,6 +117,21 @@ void InputHandler::loop() {
 
             if (a_press_.tick(a_alone, kSingleHoldTicks))
                 mode_index_ = static_cast<int>(LocomotionMode::IDLE);  // escape from anywhere
+
+            // ── A / B short presses -> recording control ─────────
+            // Voided by any other face button (so the e-stop windup and
+            // 2-button chords never read as taps). Trigger/grip don't
+            // matter here: labeling with an object in hand is fine.
+            {
+                bool other_a = ctrl->btn_b || ctrl->btn_x || ctrl->btn_y;
+                bool other_b = ctrl->btn_a || ctrl->btn_x || ctrl->btn_y;
+                auto ea = a_tap_.update(ctrl->btn_a, other_a, kLoopDt);
+                auto eb = b_tap_.update(ctrl->btn_b, other_b, kLoopDt);
+                if (ea == TapDetector::Event::Single) emit_tap(TapButton::A, TapKind::Single);
+                if (ea == TapDetector::Event::Double) emit_tap(TapButton::A, TapKind::Double);
+                if (eb == TapDetector::Event::Single) emit_tap(TapButton::B, TapKind::Single);
+                if (eb == TapDetector::Event::Double) emit_tap(TapButton::B, TapKind::Double);
+            }
             // Y tap steps up within the basic range; the hard actions
             // (RUN, squat, ...) each gate behind a deliberate 1s hold of
             // the same button — one hold, one step, release to re-arm.
@@ -219,6 +234,7 @@ void InputHandler::loop() {
 
             movement_buf.SetData(MovementState(final_mode, final_move, final_face, final_speed, final_height));
         } else {
+            a_tap_.reset(); b_tap_.reset();
             // VR link lost (stale watchdog cleared ctrl_buf) → safe stop:
             // IDLE with mode-default speed/height. Keep the current facing so
             // the robot doesn't turn toward yaw 0 while idling. The selected

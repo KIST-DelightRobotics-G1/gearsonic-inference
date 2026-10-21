@@ -39,6 +39,8 @@ inline std::vector<std::string> state_trace_columns() {
     add("ctrl_valid"); addn("ctrl_laxis", 2); addn("ctrl_raxis", 2);
     add("btn_a"); add("btn_b"); add("btn_x"); add("btn_y");
     add("trig_l"); add("trig_r"); add("grip_l"); add("grip_r");
+    // recording control: gearsonic's local mirror of the collector state (0 idle, 1 recording, 2 awaiting_label)
+    add("record_state");
     return c;
 }
 

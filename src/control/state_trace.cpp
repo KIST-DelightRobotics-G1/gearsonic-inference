@@ -9,6 +9,7 @@
 #include "unitree/hand_state_reader.hpp"
 #include "unitree/motor_health_monitor.hpp"
 #include "unitree/unitree_state_reader.hpp"
+#include "collector/record_commander.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -214,6 +215,9 @@ void StateTrace::fill(const TickInfo& info, float* row) {
     } else {
         put(0); skip(12);
     }
+
+    // recording control
+    put(static_cast<double>(static_cast<uint8_t>(RecordCommander::instance().state())));
 
     if (i != ncol)
         std::cerr << "[StateTrace] row layout mismatch: filled " << i << " of " << ncol << "\n";

@@ -51,6 +51,12 @@ add_library(motion_token_publisher STATIC src/collector/motion_token_publisher.c
 target_include_directories(motion_token_publisher PUBLIC include)
 target_link_libraries(motion_token_publisher PUBLIC kist_idl unitree_sdk2)
 
+# VR-button recording control (rt/kist/record_cmd out, rt/kist/record_status in)
+add_library(record_control STATIC src/collector/record_commander.cpp)
+target_include_directories(record_control PUBLIC include)
+target_link_libraries(record_control PUBLIC kist_idl unitree_sdk2 input_handler)
+set_target_properties(record_control PROPERTIES CXX_STANDARD 20)
+
 # ─── console_tee (stdout/stderr -> terminal + logs/latest.log) ───────────────
 add_library(console_tee STATIC src/common/console_tee.cpp)
 target_include_directories(console_tee PUBLIC include)
@@ -161,7 +167,7 @@ add_library(control STATIC
 )
 target_include_directories(control PUBLIC include)
 target_link_libraries(control PUBLIC tensorrt_inference planner_inference unitree_state_reader teleop_tracker vla_token_receiver
-                                     hand_state_reader hand_command_writer motor_health_monitor pico_vr_reader)
+                                     hand_state_reader hand_command_writer motor_health_monitor pico_vr_reader record_control)
 set_target_properties(control PROPERTIES CXX_STANDARD 20)
 
 # ─── gearsonic_inference (system facade — the external C++ API) ─────────────────
@@ -169,7 +175,7 @@ add_library(gearsonic_inference STATIC
     src/system/gearsonic_inference.cpp
 )
 target_include_directories(gearsonic_inference PUBLIC include)
-target_link_libraries(gearsonic_inference PUBLIC console_tee control unitree_command_writer hand_state_reader motor_health_monitor hand_command_writer motion_token_publisher nav_cmd_receiver yaml-cpp)
+target_link_libraries(gearsonic_inference PUBLIC console_tee control unitree_command_writer hand_state_reader motor_health_monitor hand_command_writer motion_token_publisher nav_cmd_receiver record_control yaml-cpp)
 set_target_properties(gearsonic_inference PROPERTIES CXX_STANDARD 20)
 
 # ─── main ─────────────────────────────────────────────────────────────────────
@@ -255,6 +261,11 @@ set_target_properties(test_smpl_resample_probe PROPERTIES CXX_STANDARD 20)
 add_executable(test_state_trace_probe test/test_state_trace_probe.cpp)
 target_include_directories(test_state_trace_probe PRIVATE include)
 set_target_properties(test_state_trace_probe PROPERTIES CXX_STANDARD 20)
+
+# header-only tap detector + recording decision table — no link dependencies
+add_executable(test_record_control_probe test/test_record_control_probe.cpp)
+target_include_directories(test_record_control_probe PRIVATE include)
+set_target_properties(test_record_control_probe PROPERTIES CXX_STANDARD 20)
 
 # smpl encoder mode — slot perturbation scan (optional offline check)
 add_executable(test_smpl_encoder_probe test/test_smpl_encoder_probe.cpp)
