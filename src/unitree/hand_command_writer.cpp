@@ -35,30 +35,15 @@ static inline uint8_t ris_mode(uint8_t id, bool enable) {
     return mode;
 }
 
-// Blend "open" (input=0) to "closed" (input=1) between explicit endpoints,
-// with a per-motor group input. Trigger drives the index finger (motors
-// 3..4), grip drives thumb + middle (0..2, 5..6) — see hand_command.hpp.
-// Grip alone = pointing (index extended), trigger alone = index curled,
-// both = full fist.
-//
-// The endpoints come from kDex3{Left,Right}{Open,Close} — the thumb bend
-// (motor 1) crosses zero, the rest pivot on one side of zero, and the
-// thumb rotation (motor 0) is pinned at center. See hand_command.hpp for
-// the empirical convention.
-static HandCommand from_grip_and_trigger(double grip, double trigger, bool is_left) {
-    grip    = std::clamp(grip,    0.0, 1.0);
-    trigger = std::clamp(trigger, 0.0, 1.0);
-    HandCommand cmd;
-    for (int i = 0; i < kMotorCount; ++i) {
-        float open_q  = is_left ? kDex3LeftOpen[i]  : kDex3RightOpen[i];
-        float close_q = is_left ? kDex3LeftClose[i] : kDex3RightClose[i];
-        double t = motor_on_trigger(i) ? trigger : grip;
-        cmd.q[i]  = open_q + static_cast<float>(t) * (close_q - open_q);
-        cmd.kp[i] = kHandKp;
-        cmd.kd[i] = kHandKd;
-    }
-    cmd.enabled = true;
-    return cmd;
+// Trigger / grip -> command (hand_command_from_axes in hand_command.hpp):
+// trigger drives the index finger, grip the thumb + middle; the squeeze
+// fractions (HoldSqueeze, fed by the loop) carry a held axis on from the
+// close pose to a full fist.
+static HandCommand from_grip_and_trigger(double grip, double trigger,
+                                         double squeeze_grip, double squeeze_trigger,
+                                         bool is_left) {
+    return hand_command_from_axes(grip, trigger, squeeze_grip, squeeze_trigger,
+                                  is_left, kHandKp, kHandKd);
 }
 
 // External VLA hand targets: already Dex3 motor order (thumb x3, index x2,
@@ -174,6 +159,8 @@ void HandCommandWriter::loop() {
         auto arb_mode = ControlArbiter::instance().mode();
         if (InputHandler::instance().estop()) {
             left = right = stop_command();
+            squeeze_l_grip_.reset(); squeeze_l_trig_.reset();
+            squeeze_r_grip_.reset(); squeeze_r_trig_.reset();
         } else if (auto vla = VlaTokenReceiver::instance().latent_buf.GetDataWithTime();
                    (arb_mode == ControlArbiter::Mode::kVla ||
                     arb_mode == ControlArbiter::Mode::kRecovering) &&
@@ -187,19 +174,32 @@ void HandCommandWriter::loop() {
             // this branch never fires.
             left  = from_vla_joints(vla.data->left_hand,  /*is_left=*/true);
             right = from_vla_joints(vla.data->right_hand, /*is_left=*/false);
+            squeeze_l_grip_.reset(); squeeze_l_trig_.reset();
+            squeeze_r_grip_.reset(); squeeze_r_trig_.reset();
         } else if (hold_fist) {
             // Before teleop calibration the operator isn't teleoperating
             // the hands, so hold a closed fist (the safe carry posture)
             // instead of tracking axes that are not deliberate input yet.
-            left  = from_grip_and_trigger(1.0, 1.0, /*is_left=*/true);
-            right = from_grip_and_trigger(1.0, 1.0, /*is_left=*/false);
+            // Full fist (squeeze = 1), the safe carry posture.
+            left  = from_grip_and_trigger(1.0, 1.0, 1.0, 1.0, /*is_left=*/true);
+            right = from_grip_and_trigger(1.0, 1.0, 1.0, 1.0, /*is_left=*/false);
+            squeeze_l_grip_.reset(); squeeze_l_trig_.reset();
+            squeeze_r_grip_.reset(); squeeze_r_trig_.reset();
         } else if (auto ctrl = PicoVRReader::instance().ctrl_buf.GetData()) {
-            left  = from_grip_and_trigger(ctrl->left_grip,  ctrl->left_trigger,  /*is_left=*/true);
-            right = from_grip_and_trigger(ctrl->right_grip, ctrl->right_trigger, /*is_left=*/false);
+            // An axis held at the end carries its finger group on to the fist.
+            const double dt_s = std::chrono::duration<double>(kPublishPeriod).count();
+            double slg = squeeze_l_grip_.update(ctrl->left_grip,     dt_s);
+            double slt = squeeze_l_trig_.update(ctrl->left_trigger,  dt_s);
+            double srg = squeeze_r_grip_.update(ctrl->right_grip,    dt_s);
+            double srt = squeeze_r_trig_.update(ctrl->right_trigger, dt_s);
+            left  = from_grip_and_trigger(ctrl->left_grip,  ctrl->left_trigger,  slg, slt, /*is_left=*/true);
+            right = from_grip_and_trigger(ctrl->right_grip, ctrl->right_trigger, srg, srt, /*is_left=*/false);
         } else {
             // VR link lost: hold the open pose (all inputs=0), low PD.
-            left  = from_grip_and_trigger(0.0, 0.0, /*is_left=*/true);
-            right = from_grip_and_trigger(0.0, 0.0, /*is_left=*/false);
+            left  = from_grip_and_trigger(0.0, 0.0, 0.0, 0.0, /*is_left=*/true);
+            right = from_grip_and_trigger(0.0, 0.0, 0.0, 0.0, /*is_left=*/false);
+            squeeze_l_grip_.reset(); squeeze_l_trig_.reset();
+            squeeze_r_grip_.reset(); squeeze_r_trig_.reset();
         }
 
         // Feedback stage: bound the stall torque against the measured

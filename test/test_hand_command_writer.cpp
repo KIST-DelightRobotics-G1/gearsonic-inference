@@ -12,17 +12,11 @@
 
 namespace {
 
-kist::HandCommand from_grip_and_trigger(double grip, double trigger, bool is_left) {
-    grip    = std::fmax(0.0, std::fmin(1.0, grip));
-    trigger = std::fmax(0.0, std::fmin(1.0, trigger));
-    kist::HandCommand cmd;
-    for (int i = 0; i < kist::kMotorEnd; ++i) {
-        float open_q  = is_left ? kist::kDex3LeftOpen[i]  : kist::kDex3RightOpen[i];
-        float close_q = is_left ? kist::kDex3LeftClose[i] : kist::kDex3RightClose[i];
-        double t = kist::motor_on_trigger(i) ? trigger : grip;
-        cmd.q[i] = open_q + static_cast<float>(t) * (close_q - open_q);
-    }
-    return cmd;
+// The writer's mapping is header-only (hand_command_from_axes); squeeze
+// defaults to 0 here so the existing checks read as before.
+kist::HandCommand from_grip_and_trigger(double grip, double trigger, bool is_left,
+                                        double sq_grip = 0.0, double sq_trig = 0.0) {
+    return kist::hand_command_from_axes(grip, trigger, sq_grip, sq_trig, is_left, 1.5f, 0.1f);
 }
 
 bool near_equal(float a, float b, float eps = 1e-4f) { return std::fabs(a - b) < eps; }
@@ -109,6 +103,48 @@ int main() {
                 fails += check("trigger leaves thumb/middle", near_equal(base.q[i], more_t.q[i]));
             }
         }
+    }
+
+    // ── hold-to-squeeze: s=0 is the plain close pose, s=1 the fist ──
+    {
+        auto c0 = from_grip_and_trigger(1.0, 1.0, /*is_left=*/true, 0.0, 0.0);
+        auto c1 = from_grip_and_trigger(1.0, 1.0, /*is_left=*/true, 1.0, 1.0);
+        auto ch = from_grip_and_trigger(1.0, 1.0, /*is_left=*/true, 0.5, 0.5);
+        for (int i = 0; i < kist::kMotorEnd; ++i) {
+            fails += check("squeeze 0 == close pose", near_equal(c0.q[i], kist::kDex3LeftClose[i]));
+            fails += check("squeeze 1 == fist",       near_equal(c1.q[i], kist::kDex3LeftFist[i]));
+            fails += check("squeeze 0.5 is halfway",  near_equal(ch.q[i], 0.5f * (kist::kDex3LeftClose[i] + kist::kDex3LeftFist[i])));
+        }
+        // squeeze on the trigger only moves the index; on the grip only thumb+middle
+        auto st = from_grip_and_trigger(1.0, 1.0, /*is_left=*/true, 0.0, 1.0);
+        for (int i = 0; i < kist::kMotorEnd; ++i)
+            fails += check(kist::motor_on_trigger(i) ? "trig squeeze moves index" : "trig squeeze leaves grip group",
+                           near_equal(st.q[i], kist::motor_on_trigger(i) ? kist::kDex3LeftFist[i] : kist::kDex3LeftClose[i]));
+        // below the close pose squeeze still adds the same extra travel (never clamps timing)
+        auto half = from_grip_and_trigger(0.5, 0.5, /*is_left=*/true, 0.0, 0.0);
+        auto halfs = from_grip_and_trigger(0.5, 0.5, /*is_left=*/true, 1.0, 1.0);
+        fails += check("squeeze adds fist-close delta at any t",
+                       near_equal(halfs.q[3] - half.q[3], kist::kDex3LeftFist[3] - kist::kDex3LeftClose[3]));
+    }
+
+    // ── HoldSqueeze timer: dwell, ramp, instant release ──
+    {
+        kist::HoldSqueeze h; const double dt = 0.01;
+        double s = 0; int ticks = 0;
+        for (; ticks < 100; ++ticks) { s = h.update(0.9, dt); }
+        fails += check("timer: below threshold stays 0", s == 0.0);
+        s = h.update(1.0, dt);
+        fails += check("timer: first tick at end still 0 (dwell)", s == 0.0);
+        for (ticks = 1; ticks < 200 && s < 1.0; ++ticks) s = h.update(1.0, dt);
+        double t_full = ticks * dt;
+        fails += check("timer: reaches 1", s == 1.0);
+        fails += check("timer: full after dwell+ramp (~0.5s)", t_full > 0.48 && t_full < 0.53);
+        s = h.update(0.97, dt);
+        fails += check("timer: 0.97 still counts as held", s == 1.0);
+        s = h.update(0.5, dt);
+        fails += check("timer: release -> 0 at once", s == 0.0);
+        s = h.update(1.0, dt);
+        fails += check("timer: restarts from dwell after release", s == 0.0);
     }
 
     // ── clamp ──
