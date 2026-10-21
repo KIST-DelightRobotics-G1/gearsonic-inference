@@ -23,10 +23,13 @@ namespace kist {
 //     through the recovery hold the hands keep their last targets, then
 //     the fallbacks below take over at the origin.
 //  2. VR grip/trigger values from PicoVRReader::ctrl_buf, mapped linearly
-//     onto each hand's URDF joint range (open -> closed as the axis
-//     presses in): trigger -> index, grip -> thumb + middle (grip alone
-//     points). InputHandler is not on the path: the analog axes are
-//     orthogonal to the movement command it produces.
+//     onto each hand's close pose (open -> closed as the axis presses
+//     in): trigger -> index, grip -> thumb + middle (grip alone points).
+//     An axis HELD at the end (HoldSqueeze: 0.2 s dwell, 0.3 s ramp)
+//     carries its finger group on from the close pose to a full fist;
+//     releasing drops back to the plain mapping at once. InputHandler is
+//     not on the path: the analog axes are orthogonal to the movement
+//     command it produces.
 //
 // The VR path is gated by TeleopTracker::calibrated(): until teleop
 // calibration engages, the trigger/grip axes belong to the locomotion UI,
@@ -69,6 +72,9 @@ private:
 
     HandGuard         left_guard_;
     HandGuard         right_guard_;
+
+    // Hold-to-squeeze timers, one per hand per axis (loop thread only).
+    HoldSqueeze       squeeze_l_grip_, squeeze_l_trig_, squeeze_r_grip_, squeeze_r_trig_;
 
     std::thread       loop_thread_;
     std::atomic<bool> stop_{false};
