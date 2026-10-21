@@ -129,8 +129,10 @@ void InputHandler::loop() {
                 auto eb = b_tap_.update(ctrl->btn_b, other_b, kLoopDt);
                 if (ea == TapDetector::Event::Single) emit_tap(TapButton::A, TapKind::Single);
                 if (ea == TapDetector::Event::Double) emit_tap(TapButton::A, TapKind::Double);
+                if (ea == TapDetector::Event::Triple) emit_tap(TapButton::A, TapKind::Triple);
                 if (eb == TapDetector::Event::Single) emit_tap(TapButton::B, TapKind::Single);
                 if (eb == TapDetector::Event::Double) emit_tap(TapButton::B, TapKind::Double);
+                if (eb == TapDetector::Event::Triple) emit_tap(TapButton::B, TapKind::Triple);
             }
             // Y tap steps up within the basic range; the hard actions
             // (RUN, squat, ...) each gate behind a deliberate 1s hold of

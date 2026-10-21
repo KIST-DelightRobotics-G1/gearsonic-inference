@@ -19,7 +19,7 @@ namespace kist {
 // local mirror of what it sent so the gestures stay consistent.
 //
 //   B tap    -> start      B double -> stop
-//   A tap    -> success    A double -> fail      (after a stop)
+//   A tap    -> success    A double -> fail    A triple -> partial   (after a stop)
 //
 // No thread of its own: taps arrive on the InputHandler thread (a DDS
 // write is microseconds). Requires the ChannelFactory

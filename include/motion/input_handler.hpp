@@ -45,7 +45,7 @@ public:
     void disarm() { mode_index_ = 0; }
 
     // Short-press gestures on A and B (tap_detector.hpp): a tap is a press
-    // under 0.3 s, a double two taps within 0.35 s; the 1 s holds are
+    // under 0.3 s, a double/triple taps within 0.35 s of each other; the 1 s holds are
     // untouched and 0.3..1 s is a dead band. Delivered to one sink (the
     // recording commander) from this loop's thread. A tap still drops
     // locomotion to IDLE as before — the sink sees it in addition.

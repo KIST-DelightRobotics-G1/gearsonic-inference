@@ -6,11 +6,11 @@ namespace kist {
 
 // Recording-control vocabulary shared by the VR gesture side and the
 // collector (wire values match idl/kist_msgs.idl RecordCommand).
-enum class RecordAction : uint8_t { None = 0, Start = 1, Stop = 2, LabelSuccess = 3, LabelFail = 4 };
+enum class RecordAction : uint8_t { None = 0, Start = 1, Stop = 2, LabelSuccess = 3, LabelFail = 4, LabelPartial = 5 };
 enum class RecordState  : uint8_t { Idle = 0, Recording = 1, AwaitingLabel = 2, Unknown = 255 };
 
 enum class TapButton : uint8_t { A, B };
-enum class TapKind   : uint8_t { Single, Double };
+enum class TapKind   : uint8_t { Single, Double, Triple };
 
 // Gesture -> command, given the collector's last reported state.
 //   B single : start a recording (idle, or awaiting label -> previous
@@ -19,6 +19,7 @@ enum class TapKind   : uint8_t { Single, Double };
 //   A single : label the stopped episode success (A alone also drops
 //              locomotion to IDLE, as before — that is fine after a stop)
 //   A double : label it fail
+//   A triple : label it partial (keep, but not a clean success)
 // The state passed in is the commander's local mirror of what it has
 // sent (record_next_state), since the link is one-way: the collector's
 // real state is read on its own console.
@@ -28,10 +29,17 @@ inline RecordAction record_decide(RecordState state, TapButton button, TapKind k
         case TapButton::B:
             if (kind == TapKind::Single)
                 return state != RecordState::Recording ? RecordAction::Start : RecordAction::None;
-            return state == RecordState::Recording ? RecordAction::Stop : RecordAction::None;
+            if (kind == TapKind::Double)
+                return state == RecordState::Recording ? RecordAction::Stop : RecordAction::None;
+            return RecordAction::None;
         case TapButton::A:
             if (state != RecordState::AwaitingLabel) return RecordAction::None;
-            return kind == TapKind::Single ? RecordAction::LabelSuccess : RecordAction::LabelFail;
+            switch (kind) {
+                case TapKind::Single: return RecordAction::LabelSuccess;
+                case TapKind::Double: return RecordAction::LabelFail;
+                case TapKind::Triple: return RecordAction::LabelPartial;
+            }
+            return RecordAction::None;
     }
     return RecordAction::None;
 }
@@ -43,7 +51,8 @@ inline RecordState record_next_state(RecordState current, RecordAction action) {
         case RecordAction::Start:        return RecordState::Recording;
         case RecordAction::Stop:         return RecordState::AwaitingLabel;
         case RecordAction::LabelSuccess:
-        case RecordAction::LabelFail:    return RecordState::Idle;
+        case RecordAction::LabelFail:
+        case RecordAction::LabelPartial: return RecordState::Idle;
         default:                         return current;
     }
 }
@@ -54,6 +63,7 @@ inline const char* record_action_name(RecordAction a) {
         case RecordAction::Stop:         return "stop";
         case RecordAction::LabelSuccess: return "label_success";
         case RecordAction::LabelFail:    return "label_fail";
+        case RecordAction::LabelPartial: return "label_partial";
         default:                         return "none";
     }
 }

@@ -25,7 +25,7 @@ bool RecordCommander::start() {
     InputHandler::instance().set_tap_sink(
         [this](TapButton b, TapKind k) { on_tap(b, k); });
     std::cout << "[RecordControl] started (B tap start / B double stop / A tap success / "
-                 "A double fail -> " << kCmdTopic << ")\n";
+                 "A double fail / A triple partial -> " << kCmdTopic << ")\n";
     return true;
 }
 
@@ -40,7 +40,7 @@ void RecordCommander::on_tap(TapButton button, TapKind kind) {
     RecordState  st     = assumed_.load();
     RecordAction action = record_decide(st, button, kind);
     const char* bname = button == TapButton::A ? "A" : "B";
-    const char* kname = kind == TapKind::Single ? "tap" : "double";
+    const char* kname = kind == TapKind::Single ? "tap" : (kind == TapKind::Double ? "double" : "triple");
     if (action == RecordAction::None) {
         std::cout << "[RecordControl] " << bname << " " << kname << " ignored (state "
                   << record_state_name(st) << ")\n";

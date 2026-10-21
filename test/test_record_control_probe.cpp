@@ -40,9 +40,17 @@ int main() {
     { TapDetector d; run(d, {{true, 0.10}, {false, 0.30}});
       auto late = run(d, {{false, 0.10}});
       check("single: confirmed only after 0.35 s gap", only(late, E::Single)); }
-    // ── double tap: reported at the second release ──
+    // ── double tap: confirmed after the window following the second release ──
     { TapDetector d; auto ev = run(d, {{true, 0.08}, {false, 0.15}, {true, 0.08}, {false, 0.60}});
       check("double: two quick taps -> Double only", only(ev, E::Double)); }
+    { TapDetector d; run(d, {{true, 0.08}, {false, 0.15}, {true, 0.08}, {false, 0.30}});
+      auto late = run(d, {{false, 0.10}});
+      check("double: confirmed only after the 0.35 s window", only(late, E::Double)); }
+    // ── triple tap: reported at the third release ──
+    { TapDetector d; auto ev = run(d, {{true, 0.08}, {false, 0.15}, {true, 0.08}, {false, 0.15}, {true, 0.08}, {false, 0.60}});
+      check("triple: three quick taps -> Triple only", only(ev, E::Triple)); }
+    { TapDetector d; auto ev = run(d, {{true, 0.08}, {false, 0.15}, {true, 0.08}, {false, 0.15}, {true, 0.08}, {false, 0.05}, {true, 0.08}, {false, 0.60}});
+      check("four taps: Triple then the fourth starts a new Single", ev.size() == 2 && ev[0] == E::Triple && ev[1] == E::Single); }
     { TapDetector d; auto ev = run(d, {{true, 0.08}, {false, 0.34}, {true, 0.08}, {false, 0.60}});
       check("double: gap 0.34 s still a double", only(ev, E::Double)); }
     { TapDetector d; auto ev = run(d, {{true, 0.08}, {false, 0.40}, {true, 0.08}, {false, 0.60}});
@@ -54,6 +62,8 @@ int main() {
       check("hold: 1.2 s press -> nothing here (hold gesture elsewhere)", ev.empty()); }
     { TapDetector d; auto ev = run(d, {{true, 0.08}, {false, 0.15}, {true, 0.50}, {false, 0.60}});
       check("tap then long press: cancels, no Single/Double", ev.empty()); }
+    { TapDetector d; auto ev = run(d, {{true, 0.08}, {false, 0.15}, {true, 0.08}, {false, 0.15}, {true, 0.50}, {false, 0.60}});
+      check("two taps then long press: cancels, no Double", ev.empty()); }
     // ── void by another button ──
     { TapDetector d; auto ev = run(d, {{true, 0.05}, {true, 0.05, true}, {false, 0.60}});
       check("void: another button during the press -> nothing", ev.empty()); }
@@ -74,6 +84,8 @@ int main() {
     check("recording + B tap -> none",         dec(RecordState::Recording, TapButton::B, TapKind::Single) == RecordAction::None);
     check("awaiting + A tap -> success",       dec(RecordState::AwaitingLabel, TapButton::A, TapKind::Single) == RecordAction::LabelSuccess);
     check("awaiting + A double -> fail",       dec(RecordState::AwaitingLabel, TapButton::A, TapKind::Double) == RecordAction::LabelFail);
+    check("awaiting + A triple -> partial",    dec(RecordState::AwaitingLabel, TapButton::A, TapKind::Triple) == RecordAction::LabelPartial);
+    check("recording + B triple -> none",      dec(RecordState::Recording, TapButton::B, TapKind::Triple) == RecordAction::None);
     check("awaiting + B tap -> start (unlabeled)", dec(RecordState::AwaitingLabel, TapButton::B, TapKind::Single) == RecordAction::Start);
     check("idle + A tap -> none (just IDLE)",  dec(RecordState::Idle, TapButton::A, TapKind::Single) == RecordAction::None);
     check("recording + A tap -> none",         dec(RecordState::Recording, TapButton::A, TapKind::Single) == RecordAction::None);
@@ -85,6 +97,7 @@ int main() {
     check("after stop -> awaiting_label",      nxt(RecordState::Recording, RecordAction::Stop) == RecordState::AwaitingLabel);
     check("after success -> idle",             nxt(RecordState::AwaitingLabel, RecordAction::LabelSuccess) == RecordState::Idle);
     check("after fail -> idle",                nxt(RecordState::AwaitingLabel, RecordAction::LabelFail) == RecordState::Idle);
+    check("after partial -> idle",             nxt(RecordState::AwaitingLabel, RecordAction::LabelPartial) == RecordState::Idle);
     check("none keeps state",                  nxt(RecordState::Recording, RecordAction::None) == RecordState::Recording);
     // silent collector, full cycle on the mirror alone
     RecordState s = RecordState::Idle;

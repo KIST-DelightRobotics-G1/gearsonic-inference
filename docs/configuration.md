@@ -76,7 +76,7 @@ column/time selection for a spreadsheet.
 
 VR-button recording control for kist-data-collector, one-way over
 `rt/kist/record_cmd`. B tap = start, B double-tap = stop, then A tap =
-success / A double-tap = fail. gearsonic keeps a local mirror of the
+success / A double-tap = fail / A triple-tap = partial. gearsonic keeps a local mirror of the
 collector state from what it sent; the real state is read on the
 collector's console.
 

@@ -76,5 +76,5 @@ trace:
 
 record_control:
   # VR-button recording control for kist-data-collector over DDS
-  # (B tap start, B double-tap stop, then A tap = success / A double-tap = fail).
+  # (B tap start, B double-tap stop, then A tap = success / A double-tap = fail / A triple-tap = partial).
   enabled: true
