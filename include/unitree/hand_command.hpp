@@ -59,9 +59,13 @@ inline constexpr bool motor_on_trigger(int i) { return i >= kIndexBegin && i < k
 // narrower resting thumb; the closed endpoint is untouched.
 inline constexpr float kThumbOpenBend = 0.35f;
 inline constexpr std::array<float, 7> kDex3LeftOpen  = { 0.00f, -kThumbOpenBend, 0.00f,  0.00f,  0.00f,  0.00f,  0.00f};
-inline constexpr std::array<float, 7> kDex3LeftClose = { 0.00f,  1.05f,          1.75f, -1.57f, -1.75f, -1.57f, -1.75f};
+// Finger closed endpoints follow gear_sonic's Dex3 close pose (proximal
+// 1.0, distal 1.5 rad — the tip curls 1.5x more than the base so the
+// finger wraps an object instead of clamping it), not the URDF limits
+// (1.57 / 1.75). Thumb endpoints are our own, tuned on the real hand.
+inline constexpr std::array<float, 7> kDex3LeftClose = { 0.00f,  1.05f,          1.75f, -1.00f, -1.50f, -1.00f, -1.50f};
 inline constexpr std::array<float, 7> kDex3RightOpen  = { 0.00f,  kThumbOpenBend, 0.00f,  0.00f,  0.00f,  0.00f,  0.00f};
-inline constexpr std::array<float, 7> kDex3RightClose = { 0.00f, -1.05f,         -1.75f,  1.57f,  1.75f,  1.57f,  1.75f};
+inline constexpr std::array<float, 7> kDex3RightClose = { 0.00f, -1.05f,         -1.75f,  1.00f,  1.50f,  1.00f,  1.50f};
 
 // URDF joint limits (the table above), used to clamp external/derived
 // targets before publishing.
