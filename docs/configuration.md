@@ -72,6 +72,18 @@ column/time selection for a spreadsheet.
 | `enabled` | `true` | record the trace |
 | `path` | `logs/latest.trace` | output file (inside the container, like the console mirror) |
 
+## `record_control`
+
+VR-button recording control for kist-data-collector, one-way over
+`rt/kist/record_cmd`. B tap = start, B double-tap = stop, then A tap =
+success / A double-tap = fail / A triple-tap = partial. gearsonic keeps a local mirror of the
+collector state from what it sent; the real state is read on the
+collector's console.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `enabled` | `true` | run the commander |
+
 ## VLA-mode constants (compile-time)
 
 The external-token behavior is tuned by constants, not YAML — they are

@@ -3,6 +3,7 @@
 #include "common/config.hpp"
 #include "common/console_tee.hpp"
 #include "collector/motion_token_publisher.hpp"
+#include "collector/record_commander.hpp"
 #include "control/state_trace.hpp"
 #include "control/whole_body_controller.hpp"
 #include "motion/input_handler.hpp"
@@ -139,6 +140,15 @@ bool GearsonicInference::start(const std::string& config_path) {
     }
     nav_rx_started_ = true;
 
+    // VR-button recording control (B tap start / B double stop / A tap
+    // success / A double fail -> kist-data-collector over DDS). Optional.
+    {
+        auto rc = root["record_control"];
+        bool on = !rc || !rc["enabled"] || rc["enabled"].as<bool>();
+        if (on && RecordCommander::instance().start())
+            record_ctl_started_ = true;
+    }
+
     std::cout << "[GearsonicInference] waiting for robot state...\n";
     while (!UnitreeStateReader::instance().unitree_state_buf.GetData()) {
         if (quit_) {
@@ -242,6 +252,10 @@ void GearsonicInference::stop() {
     if (planner_started_) {
         PlannerInference::instance().stop();
         planner_started_ = false;
+    }
+    if (record_ctl_started_) {
+        RecordCommander::instance().stop();
+        record_ctl_started_ = false;
     }
     if (nav_rx_started_) {
         NavCmdReceiver::instance().stop();

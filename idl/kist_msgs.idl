@@ -65,4 +65,16 @@ module kist_msgs {
         float              delta_heading;  // radians; valid iff has_delta_heading
     };
 
+    // Recording control, gearsonic (VR buttons) -> kist-data-collector,
+    // one-way: "rt/kist/record_cmd", RecordCommand, Reliable + KeepLast(8).
+    // action: 1 start, 2 stop, 3 label_success, 4 label_fail, 5 label_partial
+    // (keep, but not a clean success). gearsonic
+    // tracks the expected collector state locally from what it sent; the
+    // collector's own console is where the real state is read.
+    struct RecordCommand {
+        unsigned long long seq;
+        long long          stamp_ns;
+        octet              action;
+    };
+
 };

@@ -27,12 +27,13 @@ int main() {
                         + 1 + 29 * 6 + 4 + 3     // robot + imu
                         + 29                     // health
                         + 2 + 7 * 4              // hands
-                        + 1 + 12;                // controller
+                        + 1 + 12                 // controller
+                        + 1;                     // record_state
     check("column count matches fill()", cols.size() == expect);
     std::set<std::string> names(cols.begin(), cols.end());
     check("column names unique", names.size() == cols.size());
     check("first column is t_s", cols.front() == "t_s");
-    check("last column is grip_r", cols.back() == "grip_r");
+    check("last column is record_state", cols.back() == "record_state");
     check("q_0 present", names.count("q_0") == 1);
     check("token_63 present", names.count("token_63") == 1);
     check("smpl_j_71 present", names.count("smpl_j_71") == 1);
